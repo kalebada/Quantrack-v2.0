@@ -71,12 +71,46 @@ class Membership(models.Model):
 
 
 class Event(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     organization = models.ForeignKey(Organization, on_delete=models.CASCADE, related_name="events")
     name = models.CharField(max_length=100)
     description = models.TextField()
     date = models.DateField()
+    end_date = models.DateField(blank=True, null=True)
     time = models.TimeField(blank=True, null=True)
     location = models.CharField(max_length=200)
     is_public = models.BooleanField(default=True)
     service_hours = models.DecimalField(max_digits=5, decimal_places=2)
+    max_participants = models.PositiveIntegerField(blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"{self.name} ({self.organization.name})"
+
+    @property
+    def participant_count(self):
+        return self.participants.count()
+
+
+class Participation(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    volunteer = models.ForeignKey(Volunteer, on_delete=models.CASCADE, related_name="participations")
+    event = models.ForeignKey(Event, on_delete=models.CASCADE, related_name="participants")
+    date_participated = models.DateField(auto_now_add=True)
+    hours_completed = models.DecimalField(max_digits=5, decimal_places=2, default=0)
+    verified = models.BooleanField(default=False)
+    status = models.CharField(
+        max_length=20,
+        choices=[
+            ('joined', 'Joined'),
+            ('completed', 'Completed'),
+            ('cancelled', 'Cancelled')
+        ],
+        default='joined'
+    )
+
+    class Meta:
+        unique_together = ('volunteer', 'event')
+
+    def __str__(self):
+        return f"{self.volunteer.user.username} - {self.event.name}"

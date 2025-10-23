@@ -1,6 +1,6 @@
 from rest_framework import serializers
 from django.contrib.auth import get_user_model
-from .models import Volunteer, Admin, Organization
+from .models import Participation, Volunteer, Admin, Organization, Event
 
 User = get_user_model()
 
@@ -40,10 +40,11 @@ class RegisterSerializer(serializers.ModelSerializer):
 
     def create(self, validated_data):
         organization_id = validated_data.pop('organization_id', None)
-        date_of_birth = validated_data.pop('date_of_birth', None)
-        school_or_org = validated_data.pop('school_or_organization', '')
-
+        organization_name = validated_data.pop('organization_name', None)
+        city = validated_data.pop('city', None)
+        country = validated_data.pop('country', None)
         validated_data.pop('confirm_password')
+
         user = User.objects.create_user(
             email=validated_data['email'],
             username=validated_data.get('username', validated_data['email']),
@@ -52,29 +53,38 @@ class RegisterSerializer(serializers.ModelSerializer):
         )
 
         if user.role == 'volunteer':
-            if not date_of_birth:
-                raise serializers.ValidationError("date_of_birth is required for volunteers.")
             volunteer = Volunteer.objects.create(
                 user=user,
-                date_of_birth=date_of_birth,
-                school_or_organization=school_or_org
+                date_of_birth=validated_data.get('date_of_birth'),
+                school_or_organization=validated_data.get('school_or_organization', '')
             )
             user.profile_id = volunteer.id
 
         elif user.role == 'admin':
-            if not organization_id:
-                user.delete()
-                raise serializers.ValidationError("organization_id is required for admin registration.")
-            try:
-                organization = Organization.objects.get(id=organization_id)
-            except Organization.DoesNotExist:
-                user.delete()
-                raise serializers.ValidationError(f"Organization with ID {organization_id} not found.")
+            # Case 1: Admin joins existing organization
+            if organization_id:
+                try:
+                    organization = Organization.objects.get(id=organization_id)
+                except Organization.DoesNotExist:
+                    user.delete()
+                    raise serializers.ValidationError("Organization not found.")
 
-            admin = Admin.objects.create(
-                user=user,
-                organization=organization
-            )
+            # Case 2: Admin creates a new organization
+            elif organization_name:
+                organization = Organization.objects.create(
+                    name=organization_name,
+                    date_of_establishment=date.today(),  # default to today
+                    organization_type="Non-profit",
+                    address=f"Address of {organization_name}",
+                    city=city or "Unknown",
+                    country=country or "Unknown",
+                )
+
+            else:
+                user.delete()
+                raise serializers.ValidationError("Either organization_id or organization_name is required for admin registration.")
+
+            admin = Admin.objects.create(user=user, organization=organization)
             user.profile_id = admin.id
 
         user.save()
@@ -156,3 +166,23 @@ class JoinOrganizationSerializer(serializers.Serializer):
         except Organization.DoesNotExist:
             raise serializers.ValidationError("Invalid join code.")
         return value
+    
+
+class EventSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Event
+        fields = ['id', 'name', 'description', 'date', 'time', 'location', 'is_public', 'service_hours']
+
+
+
+class ParticipationSerializer(serializers.ModelSerializer):
+    volunteer_name = serializers.CharField(source='volunteer.user.username', read_only=True)
+    event_name = serializers.CharField(source='event.name', read_only=True)
+
+    class Meta:
+        model = Participation
+        fields = [
+            'id', 'volunteer', 'volunteer_name', 'event', 'event_name',
+            'date_participated', 'hours_completed', 'status'
+        ]
+        read_only_fields = ['date_participated']

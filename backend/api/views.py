@@ -1,27 +1,39 @@
 from os import path
+from time import timezone
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.response import Response
-from .models import Volunteer, Admin, User, Organization
-from .serializers import VolunteerSerializer, AdminSerializer, RegisterSerializer, OrganizationSerializer
+from .models import Volunteer, Admin, User, Organization, Event, Participation
+from .serializers import VolunteerSerializer, AdminSerializer, RegisterSerializer, OrganizationSerializer, EventSerializer, ParticipationSerializer
 from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 from rest_framework.permissions import BasePermission
 from rest_framework import status
-from uuid import UUID
+from uuid import UUID, uuid4
+from django.utils import timezone
+from datetime import datetime, date
+
+
+# 🔒 --- Custom Permission Classes ---
 
 class IsVolunteer(BasePermission):
+    """Allows access only to users with role 'volunteer'."""
     def has_permission(self, request, view):
         return request.user.is_authenticated and request.user.role == 'volunteer'
     
+
 class IsAdmin(BasePermission):
+    """Allows access only to users with role 'admin'."""
     def has_permission(self, request, view):
         return request.user.is_authenticated and request.user.role == 'admin'
 
 
+# 🔐 --- Authentication Views (JWT) ---
+
 class CustomTokenObtainPairView(TokenObtainPairView):
+    """Custom login view that sets access and refresh tokens as HttpOnly cookies."""
     def post(self, request, *args, **kwargs):
         try:
-            # Call SimpleJWT to validate credentials and get tokens
+            # Authenticate and obtain JWT tokens
             response = super().post(request, *args, **kwargs)
             tokens = response.data
 
@@ -37,6 +49,7 @@ class CustomTokenObtainPairView(TokenObtainPairView):
             except User.DoesNotExist:
                 return Response({'error': 'User not found'}, status=404)
 
+            # Return user info + set secure cookies
             res = Response({
                 'success': True,
                 'message': 'Login successful',
@@ -71,7 +84,9 @@ class CustomTokenObtainPairView(TokenObtainPairView):
         except Exception as e:
             return Response({'success': False, 'error': str(e)}, status=400)
 
+
 class CustomTokenRefreshView(TokenRefreshView):
+    """Refresh JWT tokens using HttpOnly refresh cookie."""
     def post(self, request, *args, **kwargs):
         try:
             refresh_token = request.COOKIES.get('refresh_token')
@@ -97,11 +112,12 @@ class CustomTokenRefreshView(TokenRefreshView):
             return Response({'success': False, 'error': str(e)}, status=400)
 
 
+# 👤 --- User Profile Views ---
 
 @api_view(['GET'])
 @permission_classes([IsAuthenticated, IsVolunteer])
 def get_my_volunteer_data(request):
-    """Get the current volunteer's own data"""
+    """Retrieve the logged-in volunteer's profile data."""
     try:
         volunteer = Volunteer.objects.get(user=request.user)
         serializer = VolunteerSerializer(volunteer)
@@ -109,10 +125,11 @@ def get_my_volunteer_data(request):
     except Volunteer.DoesNotExist:
         return Response({'error': 'Volunteer profile not found'}, status=404)
 
+
 @api_view(['GET'])
 @permission_classes([IsAuthenticated, IsAdmin])
 def get_my_admin_data(request):
-    """Get the current admin's own data"""
+    """Retrieve the logged-in admin's profile data."""
     try:
         admin = Admin.objects.get(user=request.user)
         serializer = AdminSerializer(admin)
@@ -124,21 +141,126 @@ def get_my_admin_data(request):
 @api_view(['POST'])
 @permission_classes([AllowAny])
 def register_user(request):
-    serializer = RegisterSerializer(data=request.data)
-    if serializer.is_valid():
-        serializer.save()
-        return Response(serializer.data, status=201)
-    return Response(serializer.errors, status=400)
+    """
+    Register a new user (volunteer or admin).
+    Admins can:
+    - join existing organization (with join_code)
+    - or create new one (with organization_name)
+    """
+    data = request.data
+    role = data.get("role")
+
+    # --- Common validation ---
+    required_fields = ["email", "password", "confirm_password", "role"]
+    for field in required_fields:
+        if field not in data:
+            return Response({"error": f"{field} is required."}, status=400)
+
+    if data["password"] != data["confirm_password"]:
+        return Response({"error": "Passwords do not match."}, status=400)
+
+    if User.objects.filter(email=data["email"]).exists():
+        return Response({"error": "User with this email already exists."}, status=400)
+
+    # --- Create User ---
+    user = User.objects.create_user(
+        email=data["email"],
+        username=data.get("username", data["email"]),
+        password=data["password"],
+        role=role
+    )
+
+    # ---------------- VOLUNTEER ----------------
+    if role == "volunteer":
+        date_of_birth = data.get("date_of_birth")
+        if not date_of_birth:
+            user.delete()
+            return Response({"error": "date_of_birth is required for volunteers."}, status=400)
+
+        volunteer = Volunteer.objects.create(
+            user=user,
+            date_of_birth=date_of_birth,
+            school_or_organization=data.get("school_or_organization", "")
+        )
+
+        return Response({
+            "message": "Volunteer registered successfully.",
+            "volunteer": {
+                "id": str(volunteer.id),
+                "email": user.email,
+                "date_of_birth": date_of_birth
+            }
+        }, status=201)
+
+    # ---------------- ADMIN ----------------
+    elif role == "admin":
+        join_code = data.get("join_code")
+        org_name = data.get("organization_name")
+
+        if join_code:
+            # ✅ Join existing org
+            try:
+                organization = Organization.objects.get(join_code=join_code)
+            except Organization.DoesNotExist:
+                user.delete()
+                return Response({"error": "Invalid join code."}, status=404)
+
+        elif org_name:
+            # ✅ Create new org safely with defaults
+            organization = Organization.objects.create(
+                name=org_name,
+                date_of_establishment=data.get("date_of_establishment", date.today()),
+                registration_number=data.get("registration_number", str(uuid4())[:10]),
+                organization_type=data.get("organization_type", "Non-profit"),
+                website=data.get("website", ""),
+                description=data.get("description", ""),
+                address=data.get("address", f"Address of {org_name}"),
+                city=data.get("city", "Unknown"),
+                country=data.get("country", "Unknown"),
+            )
+
+        else:
+            user.delete()
+            return Response({
+                "error": "Provide either 'join_code' to join or 'organization_name' to create a new one."
+            }, status=400)
+
+        # ✅ Create admin profile
+        admin = Admin.objects.create(
+            user=user,
+            organization=organization,
+            phone_number=data.get("phone_number", ""),
+            job_title=data.get("job_title", "")
+        )
+
+        return Response({
+            "message": "Admin registered successfully.",
+            "organization": {
+                "id": str(organization.id),
+                "name": organization.name,
+                "join_code": organization.join_code
+            },
+            "admin": {
+                "id": str(admin.id),
+                "email": user.email
+            }
+        }, status=201)
+
+    else:
+        user.delete()
+        return Response({"error": "Invalid role. Use 'volunteer' or 'admin'."}, status=400)
 
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def authenticated(request):
+    """Check if the user is authenticated."""
     return Response('authenticated')
 
 
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def logout_user(request):
+    """Logout the user by deleting JWT cookies."""
     try:
         res = Response()
         res.data = {'success': True, 'message': 'Logged out successfully'}
@@ -146,12 +268,15 @@ def logout_user(request):
         res.delete_cookie('refresh_token', path='/')
         return res
     except:
-        return Response({'success':False, 'messsage': 'Logout failed'})
+        return Response({'success': False, 'message': 'Logout failed'})
 
+
+# 🏢 --- Organization Join/Quit Views ---
 
 @api_view(['POST'])
 @permission_classes([IsAuthenticated, IsVolunteer])
 def join_organization_by_code(request):
+    """Volunteer joins an organization using a join code."""
     join_code = request.data.get('join_code')
 
     if not join_code:
@@ -181,6 +306,7 @@ def join_organization_by_code(request):
 @api_view(['POST'])
 @permission_classes([IsAuthenticated, IsVolunteer])
 def quit_organization_by_code(request):
+    """Volunteer leaves an organization using a join code."""
     join_code = request.data.get('join_code')
 
     if not join_code:
@@ -207,9 +333,12 @@ def quit_organization_by_code(request):
         return Response({'success': False, 'message': 'Invalid join code'}, status=404)
 
 
+# 🆔 --- Admin/Volunteer Data Access by UUID ---
+
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def get_volunteer_data_by_id(request, volunteer_id):
+    """Fetch a volunteer profile by UUID."""
     try:
         volunteer = Volunteer.objects.get(id=UUID(volunteer_id))
         serializer = VolunteerSerializer(volunteer)
@@ -221,6 +350,7 @@ def get_volunteer_data_by_id(request, volunteer_id):
 @api_view(['PATCH'])
 @permission_classes([IsAuthenticated, IsVolunteer])
 def update_my_volunteer_data(request):
+    """Allow volunteer to update their own profile."""
     try:
         volunteer = Volunteer.objects.get(user=request.user)
         serializer = VolunteerSerializer(volunteer, data=request.data, partial=True)
@@ -235,6 +365,7 @@ def update_my_volunteer_data(request):
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def get_admin_data_by_id(request, admin_id):
+    """Fetch an admin profile by UUID."""
     try:
         admin = Admin.objects.get(id=UUID(admin_id))
         serializer = AdminSerializer(admin)
@@ -246,6 +377,7 @@ def get_admin_data_by_id(request, admin_id):
 @api_view(['PATCH'])
 @permission_classes([IsAuthenticated, IsAdmin])
 def update_my_admin_data(request):
+    """Allow admin to update their own profile."""
     try:
         admin = Admin.objects.get(user=request.user)
         serializer = AdminSerializer(admin, data=request.data, partial=True)
@@ -257,11 +389,207 @@ def update_my_admin_data(request):
         return Response({'error': 'Admin profile not found'}, status=404)
 
 
+# 🏛️ --- Organization Management ---
+
 @api_view(['POST'])
 @permission_classes([AllowAny])
 def register_organization(request):
+    """Create a new organization record."""
     serializer = OrganizationSerializer(data=request.data)
     if serializer.is_valid():
         organization = serializer.save()
         return Response(OrganizationSerializer(organization).data, status=201)
     return Response(serializer.errors, status=400)
+
+
+# 📅 --- Event Management ---
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated, IsVolunteer])
+def get_my_events_as_volunteer(request):
+    """Get all events from organizations the volunteer belongs to."""
+    try:
+        volunteer = Volunteer.objects.get(user=request.user)
+        events = Event.objects.filter(organization__in=volunteer.organizations.all())
+        serializer = EventSerializer(events, many=True)
+        return Response({'events': serializer.data}, status=200)
+    except Volunteer.DoesNotExist:
+        return Response({'error': 'Volunteer profile not found'}, status=404)
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated, IsAdmin])
+def get_my_events_as_admin(request):
+    """Get all events belonging to the admin's organization."""
+    try:
+        admin = Admin.objects.get(user=request.user)
+        organization = admin.organization
+        events = organization.events.all()
+        serializer = EventSerializer(events, many=True)
+        return Response({'events': serializer.data}, status=200)
+    except Admin.DoesNotExist:
+        return Response({'error': 'Admin profile not found'}, status=404)
+    
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated, IsAdmin])
+def create_event(request):
+    """Create a new event under the admin's organization."""
+    try:
+        admin = Admin.objects.get(user=request.user)
+        organization = admin.organization
+
+        serializer = EventSerializer(data=request.data)
+        if serializer.is_valid():
+            event = serializer.save(organization=organization)
+            return Response({
+                'success': True,
+                'message': f'Event "{event.name}" created successfully',
+                'event': EventSerializer(event).data
+            }, status=201)
+        return Response({'success': False, 'errors': serializer.errors}, status=400)
+    except Admin.DoesNotExist:
+        return Response({'error': 'Admin profile not found'}, status=404)
+    
+
+@api_view(['PATCH'])
+@permission_classes([IsAuthenticated, IsAdmin])
+def update_event(request, event_id):
+    """Update an event by its UUID."""
+    try:
+        admin = Admin.objects.get(user=request.user)
+        organization = admin.organization
+        event = organization.events.filter(id=event_id).first()
+        if not event:
+            return Response({'error': 'Event not found'}, status=404)
+        serializer = EventSerializer(event, data=request.data, partial=True)
+        if serializer.is_valid():
+            updated_event = serializer.save()
+            return Response({
+                'success': True,
+                'message': f'Event "{updated_event.name}" updated successfully',
+                'event': EventSerializer(updated_event).data
+            })
+        return Response({'success': False, 'errors': serializer.errors}, status=400)
+    except Admin.DoesNotExist:
+        return Response({'error': 'Admin profile not found'}, status=404)
+    
+
+@api_view(['DELETE'])
+@permission_classes([IsAuthenticated, IsAdmin])
+def delete_event(request, event_id):
+    """Delete an event by its UUID."""
+    try:
+        admin = Admin.objects.get(user=request.user)
+        organization = admin.organization
+        event = organization.events.filter(id=event_id).first()
+        if not event:
+            return Response({'error': 'Event not found'}, status=404)
+        event_name = event.name
+        event.delete()
+        return Response({
+            'success': True,
+            'message': f'Event "{event_name}" deleted successfully'
+        }, status=200)
+    except Admin.DoesNotExist:
+        return Response({'error': 'Admin profile not found'}, status=404)
+
+
+# 🙋 --- Participation Management ---
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated, IsVolunteer])
+def join_event(request, event_id):
+    """Volunteer joins an event."""
+    try:
+        volunteer = Volunteer.objects.get(user=request.user)
+        event = Event.objects.get(id=event_id)
+
+        # Prevent joining twice
+        if Participation.objects.filter(volunteer=volunteer, event=event).exists():
+            return Response({'error': 'You already joined this event.'}, status=400)
+
+        participation = Participation.objects.create(volunteer=volunteer, event=event)
+        return Response({
+            'message': f'Joined event "{event.name}" successfully.',
+            'participation': ParticipationSerializer(participation).data
+        }, status=201)
+    except Volunteer.DoesNotExist:
+        return Response({'error': 'Volunteer profile not found.'}, status=404)
+    except Event.DoesNotExist:
+        return Response({'error': 'Event not found.'}, status=404)
+    
+
+@api_view(['DELETE'])
+@permission_classes([IsAuthenticated, IsVolunteer])
+def cancel_participation(request, event_id):
+    """Volunteer cancels their participation in an event."""
+    try:
+        volunteer = Volunteer.objects.get(user=request.user)
+        participation = Participation.objects.filter(volunteer=volunteer, event_id=event_id).first()
+
+        if not participation:
+            return Response({'error': 'You are not participating in this event.'}, status=404)
+
+        participation.status = 'cancelled'
+        participation.save()
+        return Response({'message': f'Participation in "{participation.event.name}" cancelled.'}, status=200)
+    except Volunteer.DoesNotExist:
+        return Response({'error': 'Volunteer profile not found.'}, status=404)
+    
+
+
+@api_view(['PATCH'])
+@permission_classes([IsAuthenticated, IsAdmin])
+def mark_participation_completed(request, participation_id):
+    """Admin marks a volunteer's participation as completed."""
+    try:
+        admin = Admin.objects.get(user=request.user)
+        participation = Participation.objects.get(id=participation_id)
+
+        # Security check — admin must belong to same organization
+        if participation.event.organization != admin.organization:
+            return Response({'error': 'You cannot modify events from another organization.'}, status=403)
+
+        participation.status = 'completed'
+        participation.hours_completed = request.data.get('hours_completed', participation.event.service_hours)
+        participation.date_completed = timezone.now()
+        participation.save()
+
+        return Response({
+            'message': f'{participation.volunteer.user.username} marked as completed for "{participation.event.name}".',
+            'participation': ParticipationSerializer(participation).data
+        })
+    except Admin.DoesNotExist:
+        return Response({'error': 'Admin profile not found.'}, status=404)
+    except Participation.DoesNotExist:
+        return Response({'error': 'Participation record not found.'}, status=404)
+    
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated, IsVolunteer])
+def get_my_participations_as_volunteer(request):
+    """Get all participation records for the logged-in volunteer."""
+    try:
+        volunteer = Volunteer.objects.get(user=request.user)
+        participations = volunteer.participations.select_related('event').all()
+        serializer = ParticipationSerializer(participations, many=True)
+        return Response({'participations': serializer.data}, status=200)
+    except Volunteer.DoesNotExist:
+        return Response({'error': 'Volunteer profile not found.'}, status=404)
+
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated, IsAdmin])
+def get_participations_as_admin(request, event_id):
+    """Get all participation records for events under the admin's organization."""
+    try:
+        admin = Admin.objects.get(user=request.user)
+        organization = admin.organization
+        participations = Participation.objects.filter(event__organization=organization, event_id=event_id).select_related('volunteer', 'event')
+        serializer = ParticipationSerializer(participations, many=True)
+        return Response({'participations': serializer.data}, status=200)
+    except Admin.DoesNotExist:
+        return Response({'error': 'Admin profile not found.'}, status=404)
