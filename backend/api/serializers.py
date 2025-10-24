@@ -1,6 +1,7 @@
 from rest_framework import serializers
 from django.contrib.auth import get_user_model
 from .models import Participation, Volunteer, Admin, Organization, Event
+from datetime import date
 
 User = get_user_model()
 
@@ -9,92 +10,111 @@ User = get_user_model()
 class UserSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
-        fields = ['id', 'email', 'username', 'role']
+        fields = ['id', 'email', 'username', 'role', 'is_active']
         read_only_fields = ['id']
 
 
 # ========== Registration Serializer ==========
 class RegisterSerializer(serializers.ModelSerializer):
-    id = serializers.ReadOnlyField()
     password = serializers.CharField(write_only=True)
     confirm_password = serializers.CharField(write_only=True)
-    profile_id = serializers.IntegerField(read_only=True)
+    
+    # Extra fields for volunteers/admins
     organization_id = serializers.IntegerField(write_only=True, required=False)
+    organization_name = serializers.CharField(write_only=True, required=False)
+    city = serializers.CharField(write_only=True, required=False)
+    country = serializers.CharField(write_only=True, required=False)
     date_of_birth = serializers.DateField(write_only=True, required=False)
     school_or_organization = serializers.CharField(write_only=True, required=False)
-
-
+    
+    profile_id = serializers.ReadOnlyField(source='get_profile_id')  # Will compute dynamically
 
     class Meta:
         model = User
-        fields = ['id', 'email', 'username', 'password', 'confirm_password', 'role', 'profile_id', 'organization_id', 'date_of_birth', 'school_or_organization']
-
+        fields = [
+            'id', 'email', 'username', 'password', 'confirm_password', 'role',
+            'profile_id', 'organization_id', 'organization_name', 'city', 'country',
+            'date_of_birth', 'school_or_organization'
+        ]
+    
     def validate(self, data):
+        # Password match check
         if data['password'] != data['confirm_password']:
             raise serializers.ValidationError("Passwords do not match.")
         
-        if data['role'] == 'admin' and 'organization_id' not in data:
-            raise serializers.ValidationError("Organization ID is required for admin registration.")
+        # Admin must have organization_id or organization_name
+        if data['role'] == 'admin' and not (data.get('organization_id') or data.get('organization_name')):
+            raise serializers.ValidationError("Organization ID or organization name is required for admin registration.")
         
         return data
 
+    def validate_email(self, value):
+        if User.objects.filter(email=value).exists():
+            raise serializers.ValidationError("A user with that email already exists.")
+        return value
+
     def create(self, validated_data):
+        # Pop extra fields
         organization_id = validated_data.pop('organization_id', None)
         organization_name = validated_data.pop('organization_name', None)
         city = validated_data.pop('city', None)
         country = validated_data.pop('country', None)
-        validated_data.pop('confirm_password')
+        date_of_birth = validated_data.pop('date_of_birth', None)
+        school_or_organization = validated_data.pop('school_or_organization', None)
+        validated_data.pop('confirm_password', None)
 
+        # Create user
         user = User.objects.create_user(
             email=validated_data['email'],
             username=validated_data.get('username', validated_data['email']),
             password=validated_data['password'],
             role=validated_data['role']
         )
+        user.is_active = False  # Email verification required
+        user.save()
 
+        # Volunteer profile
         if user.role == 'volunteer':
             volunteer = Volunteer.objects.create(
                 user=user,
-                date_of_birth=validated_data.get('date_of_birth'),
-                school_or_organization=validated_data.get('school_or_organization', '')
+                date_of_birth=date_of_birth,
+                school_or_organization=school_or_organization or ""
             )
-            user.profile_id = volunteer.id
+            user._profile_obj = volunteer  # Temporary for serializer field
 
+        # Admin profile
         elif user.role == 'admin':
-            # Case 1: Admin joins existing organization
             if organization_id:
                 try:
                     organization = Organization.objects.get(id=organization_id)
                 except Organization.DoesNotExist:
                     user.delete()
                     raise serializers.ValidationError("Organization not found.")
-
-            # Case 2: Admin creates a new organization
-            elif organization_name:
+            else:  # create new organization
                 organization = Organization.objects.create(
                     name=organization_name,
-                    date_of_establishment=date.today(),  # default to today
+                    date_of_establishment=date.today(),
                     organization_type="Non-profit",
                     address=f"Address of {organization_name}",
                     city=city or "Unknown",
-                    country=country or "Unknown",
+                    country=country or "Unknown"
                 )
-
-            else:
-                user.delete()
-                raise serializers.ValidationError("Either organization_id or organization_name is required for admin registration.")
-
             admin = Admin.objects.create(user=user, organization=organization)
-            user.profile_id = admin.id
+            user._profile_obj = admin  # Temporary for serializer field
 
-        user.save()
         return user
-    
 
-    def validate_email(self, value):
-        if User.objects.filter(email=value).exists():
-            raise serializers.ValidationError("A user with that email already exists.")
-        return value
+    def get_profile_id(self, obj):
+        """Dynamically return profile ID (volunteer/admin)"""
+        if hasattr(obj, '_profile_obj'):
+            return obj._profile_obj.id
+        try:
+            if obj.role == 'volunteer':
+                return obj.volunteer.id
+            elif obj.role == 'admin':
+                return obj.admin.id
+        except:
+            return None
 
 
 class VolunteerSerializer(serializers.ModelSerializer):

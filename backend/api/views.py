@@ -1,30 +1,25 @@
 from os import path
-from time import timezone
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.response import Response
 from .models import Volunteer, Admin, User, Organization, Event, Participation
-from .serializers import VolunteerSerializer, AdminSerializer, RegisterSerializer, OrganizationSerializer, EventSerializer, ParticipationSerializer
+from .serializers import VolunteerSerializer, AdminSerializer, OrganizationSerializer, EventSerializer, ParticipationSerializer
 from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
-from rest_framework.permissions import BasePermission
 from rest_framework import status
 from uuid import UUID, uuid4
 from django.utils import timezone
-from datetime import datetime, date
+from datetime import  date
+from api.utils.permisions import IsVolunteer, IsAdmin, IsEmailVerified
+from django.core.mail import send_mail
+from django.conf import settings
+from api.utils.email_token import email_verification_token
+from django.utils.http import urlsafe_base64_encode
+from django.utils.encoding import force_bytes
+from django.utils.http import urlsafe_base64_decode
+from django.contrib.auth import get_user_model
 
+User = get_user_model()
 
-# 🔒 --- Custom Permission Classes ---
-
-class IsVolunteer(BasePermission):
-    """Allows access only to users with role 'volunteer'."""
-    def has_permission(self, request, view):
-        return request.user.is_authenticated and request.user.role == 'volunteer'
-    
-
-class IsAdmin(BasePermission):
-    """Allows access only to users with role 'admin'."""
-    def has_permission(self, request, view):
-        return request.user.is_authenticated and request.user.role == 'admin'
 
 
 # 🔐 --- Authentication Views (JWT) ---
@@ -169,6 +164,8 @@ def register_user(request):
         password=data["password"],
         role=role
     )
+    user.is_active = False  # Inactive until email verification
+    user.save()
 
     # ---------------- VOLUNTEER ----------------
     if role == "volunteer":
@@ -182,6 +179,8 @@ def register_user(request):
             date_of_birth=date_of_birth,
             school_or_organization=data.get("school_or_organization", "")
         )
+
+        send_verification_email(request, user)
 
         return Response({
             "message": "Volunteer registered successfully.",
@@ -233,6 +232,8 @@ def register_user(request):
             job_title=data.get("job_title", "")
         )
 
+        send_verification_email(request, user)
+
         return Response({
             "message": "Admin registered successfully.",
             "organization": {
@@ -245,10 +246,14 @@ def register_user(request):
                 "email": user.email
             }
         }, status=201)
+        
+
+    # ---------------- INVALID ROLE ----------------
 
     else:
         user.delete()
         return Response({"error": "Invalid role. Use 'volunteer' or 'admin'."}, status=400)
+
 
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
@@ -274,7 +279,7 @@ def logout_user(request):
 # 🏢 --- Organization Join/Quit Views ---
 
 @api_view(['POST'])
-@permission_classes([IsAuthenticated, IsVolunteer])
+@permission_classes([IsAuthenticated, IsVolunteer, IsEmailVerified])
 def join_organization_by_code(request):
     """Volunteer joins an organization using a join code."""
     join_code = request.data.get('join_code')
@@ -304,7 +309,7 @@ def join_organization_by_code(request):
     
 
 @api_view(['POST'])
-@permission_classes([IsAuthenticated, IsVolunteer])
+@permission_classes([IsAuthenticated, IsVolunteer, IsEmailVerified])
 def quit_organization_by_code(request):
     """Volunteer leaves an organization using a join code."""
     join_code = request.data.get('join_code')
@@ -432,7 +437,7 @@ def get_my_events_as_admin(request):
     
 
 @api_view(['POST'])
-@permission_classes([IsAuthenticated, IsAdmin])
+@permission_classes([IsAuthenticated, IsAdmin, IsEmailVerified])
 def create_event(request):
     """Create a new event under the admin's organization."""
     try:
@@ -453,7 +458,7 @@ def create_event(request):
     
 
 @api_view(['PATCH'])
-@permission_classes([IsAuthenticated, IsAdmin])
+@permission_classes([IsAuthenticated, IsAdmin, IsEmailVerified])
 def update_event(request, event_id):
     """Update an event by its UUID."""
     try:
@@ -476,7 +481,7 @@ def update_event(request, event_id):
     
 
 @api_view(['DELETE'])
-@permission_classes([IsAuthenticated, IsAdmin])
+@permission_classes([IsAuthenticated, IsAdmin, IsEmailVerified])
 def delete_event(request, event_id):
     """Delete an event by its UUID."""
     try:
@@ -498,7 +503,7 @@ def delete_event(request, event_id):
 # 🙋 --- Participation Management ---
 
 @api_view(['POST'])
-@permission_classes([IsAuthenticated, IsVolunteer])
+@permission_classes([IsAuthenticated, IsVolunteer, IsEmailVerified])
 def join_event(request, event_id):
     """Volunteer joins an event."""
     try:
@@ -521,7 +526,7 @@ def join_event(request, event_id):
     
 
 @api_view(['DELETE'])
-@permission_classes([IsAuthenticated, IsVolunteer])
+@permission_classes([IsAuthenticated, IsVolunteer, IsEmailVerified])
 def cancel_participation(request, event_id):
     """Volunteer cancels their participation in an event."""
     try:
@@ -540,7 +545,7 @@ def cancel_participation(request, event_id):
 
 
 @api_view(['PATCH'])
-@permission_classes([IsAuthenticated, IsAdmin])
+@permission_classes([IsAuthenticated, IsAdmin, IsEmailVerified])
 def mark_participation_completed(request, participation_id):
     """Admin marks a volunteer's participation as completed."""
     try:
@@ -593,3 +598,49 @@ def get_participations_as_admin(request, event_id):
         return Response({'participations': serializer.data}, status=200)
     except Admin.DoesNotExist:
         return Response({'error': 'Admin profile not found.'}, status=404)
+    
+
+
+def send_verification_email(request, user):
+    uid = urlsafe_base64_encode(force_bytes(user.pk))
+    token = email_verification_token.make_token(user)
+    verify_url = f"{request.scheme}://{request.get_host()}/api/verify-email/{uid}/{token}/"
+
+    send_mail(
+        subject="Verify your email - QuanTrack",
+        message=f"Hi {user.username},\nPlease verify your email by clicking this link:\n{verify_url}",
+        from_email=settings.DEFAULT_FROM_EMAIL,
+        recipient_list=[user.email],
+        fail_silently=False,
+    )
+
+
+
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def verify_email(request, uidb64, token):
+    try:
+        uid = urlsafe_base64_decode(uidb64).decode()
+        user = User.objects.get(pk=uid)
+    except (TypeError, ValueError, OverflowError, User.DoesNotExist):
+        return Response({'error': 'Invalid verification link'}, status=400)
+
+    if user.is_active:
+        return Response({'message': 'Email already verified'}, status=200)
+
+    if email_verification_token.check_token(user, token):
+        user.is_active = True
+        user.save()
+        return Response({'message': 'Email successfully verified!'}, status=200)
+    else:
+        return Response({'error': 'Invalid or expired token'}, status=400)
+
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def resend_verification_email(request):
+    if request.user.is_active:
+        return Response({'message': 'Email already verified'}, status=200)
+    send_verification_email(request, request.user)
+    return Response({'message': 'Verification email resent.'}, status=200)
