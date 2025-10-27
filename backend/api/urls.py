@@ -27,4 +27,9 @@ urlpatterns = [
     path('participations-as-admin/<uuid:event_id>/', views.get_participations_as_admin),
     path('participations/<uuid:participation_id>/complete/', views.mark_participation_completed),
     path('verify-email/<uidb64>/<token>/', views.verify_email, name='verify-email'),
+    path('analytics/volunteer-stats/', views.volunteer_stats),
+    path('analytics/event-participation-stats/', views.event_participation_stats),
+    path('analytics/my-volunteer-stats/', views.my_volunteer_stats),
+    path('analytics/my-admin-stats/', views.my_admin_stats),
+    path('analytics/my-organization-stats/', views.my_organization_stats),
 ]

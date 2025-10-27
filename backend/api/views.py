@@ -17,6 +17,7 @@ from django.utils.http import urlsafe_base64_encode
 from django.utils.encoding import force_bytes
 from django.utils.http import urlsafe_base64_decode
 from django.contrib.auth import get_user_model
+from django.db.models import Count, Sum, Q, Avg
 
 User = get_user_model()
 
@@ -644,3 +645,184 @@ def resend_verification_email(request):
         return Response({'message': 'Email already verified'}, status=200)
     send_verification_email(request, request.user)
     return Response({'message': 'Verification email resent.'}, status=200)
+
+
+
+
+# 📊 --- Analytics Views ---
+
+
+
+def get_volunteer_stats(volunteer_id):
+    try:
+        volunteer = Volunteer.objects.get(id=volunteer_id)
+    except Volunteer.DoesNotExist:
+        return None
+
+    participations = volunteer.participations.all()
+
+    total_events_joined = participations.count()
+    completed_events = participations.filter(status='completed').count()
+    cancelled_events = participations.filter(status='cancelled').count()
+    total_hours_completed = participations.filter(status='completed').aggregate(
+        total=Sum('hours_completed')
+    )['total'] or 0
+    average_hours_per_event = (
+        total_hours_completed / completed_events if completed_events else 0
+    )
+
+    return {
+        "volunteer_id": str(volunteer.id),
+        "username": volunteer.user.username,
+        "total_events_joined": total_events_joined,
+        "completed_events": completed_events,
+        "cancelled_events": cancelled_events,
+        "total_hours_completed": float(total_hours_completed),
+        "average_hours_per_event": float(average_hours_per_event),
+    }
+
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated, IsAdmin])
+def volunteer_stats(request):
+    """
+    Return simple analytics about volunteers and participation.
+    Example stats:
+      - total volunteers
+      - total events
+      - total participations
+      - volunteers per organization
+    """
+    total_volunteers = Volunteer.objects.count()
+    total_events = Event.objects.count()
+    total_participations = Participation.objects.count()
+
+    # Volunteers per organization
+    org_stats = (
+        Volunteer.objects
+        .values('organizations__name')
+        .annotate(volunteer_count=Count('id'))
+        .order_by('-volunteer_count')
+    )
+
+    org_stats_list = [
+        {'organization': item['organizations__name'] or 'No Org', 'volunteer_count': item['volunteer_count']}
+        for item in org_stats
+    ]
+
+    data = {
+        'total_volunteers': total_volunteers,
+        'total_events': total_events,
+        'total_participations': total_participations,
+        'volunteers_per_organization': org_stats_list,
+    }
+
+    return Response(data)
+
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated, IsAdmin])
+def event_participation_stats(request):
+    """
+    Returns stats per event for the admin's organization:
+      - total participants
+      - completed participations
+      - cancelled participations
+    """
+    try:
+        admin = Admin.objects.get(user=request.user)
+        organization = admin.organization
+
+        events = organization.events.all()
+        stats = []
+
+        for event in events:
+            participations = event.participants.all()
+            stats.append({
+                'event_id': str(event.id),
+                'event_name': event.name,
+                'total_participants': participations.count(),
+                'completed': participations.filter(status='completed').count(),
+                'cancelled': participations.filter(status='cancelled').count(),
+            })
+
+        return Response({'event_participation_stats': stats})
+
+    except Admin.DoesNotExist:
+        return Response({'error': 'Admin profile not found.'}, status=404)
+
+
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated, IsVolunteer, IsEmailVerified])
+def my_volunteer_stats(request):
+    volunteer = Volunteer.objects.get(user=request.user)
+
+    participations = Participation.objects.filter(volunteer=volunteer)
+
+    total_events = participations.count()
+    events_completed = participations.filter(status='completed').count()
+    hours_completed = participations.aggregate(Sum('hours_completed'))['hours_completed__sum'] or 0
+    average_hours = participations.filter(status='completed').aggregate(Avg('hours_completed'))['hours_completed__avg'] or 0
+
+    data = {
+        "volunteer_id": str(volunteer.id),
+        "total_events_joined": total_events,
+        "events_completed": events_completed,
+        "hours_completed": hours_completed,
+        "average_hours_per_event": round(average_hours, 2)
+    }
+    return Response(data)
+
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated, IsAdmin, IsEmailVerified])
+def my_admin_stats(request):
+    admin = Admin.objects.get(user=request.user)
+    events = Event.objects.filter(organization=admin.organization)
+
+    total_events = events.count()
+    total_participations = Participation.objects.filter(event__in=events).count()
+    completed_participations = Participation.objects.filter(event__in=events, status='completed').count()
+    total_hours = Participation.objects.filter(event__in=events).aggregate(Sum('hours_completed'))['hours_completed__sum'] or 0
+
+    data = {
+        "admin_id": str(admin.id),
+        "organization_id": str(admin.organization.id),
+        "total_events_managed": total_events,
+        "total_participations": total_participations,
+        "completed_participations": completed_participations,
+        "total_hours_contributed": total_hours
+    }
+    return Response(data)
+
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated, IsAdmin, IsEmailVerified])
+def my_organization_stats(request):
+    admin = Admin.objects.get(user=request.user)
+    org = admin.organization
+    events = Event.objects.filter(organization=org)
+    participations = Participation.objects.filter(event__in=events)
+
+    total_events = events.count()
+    total_volunteers = participations.values('volunteer').distinct().count()
+    total_participations = participations.count()
+    completed_participations = participations.filter(status='completed').count()
+    total_hours = participations.aggregate(Sum('hours_completed'))['hours_completed__sum'] or 0
+
+    data = {
+        "organization_id": str(org.id),
+        "organization_name": org.name,
+        "total_events": total_events,
+        "unique_volunteers": total_volunteers,
+        "total_participations": total_participations,
+        "completed_participations": completed_participations,
+        "total_hours": total_hours
+    }
+    return Response(data)
