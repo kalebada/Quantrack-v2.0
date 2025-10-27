@@ -18,11 +18,11 @@ const Login = () => {
               <button className='w-full p-2 md:text-xl lg:text-base'>Team Admin</button>
           </div>
             <div className='w-full flex flex-col justify-center items-start gap-2'>
-              <label htmlFor="" className='text-white text-lg font-[montserrat] md:text-2xl lg:text-lg'>Email</label>
+              <label htmlFor="" className='text-white  font-[montserrat] md:text-2xl lg:text-lg'>Email</label>
               <input type="email" name="" id="" placeholder='Enter Email' className='w-full text-white border border-[#9B4DFF] p-3 md:py-4 lg:py-3 md:text-xl lg:text-base rounded-lg focus:outline-none placeholder:font-[montserrat] placeholder:text-gray-400' />
             </div>
             <div className='w-full flex flex-col justify-center items-start gap-2'>
-              <label htmlFor=""  className='text-white text-lg font-[montserrat] md:text-2xl lg:text-lg'>Password</label>
+              <label htmlFor=""  className='text-white font-[montserrat] md:text-2xl lg:text-lg'>Password</label>
               <input type="password" name="" id="" placeholder='Enter Password' className='w-full text-white border border-[#9B4DFF] p-3 md:py-4 lg:py-3 md:text-xl lg:text-base rounded-lg focus:outline-none placeholder:font-[montserrat] placeholder:text-gray-400' />
             </div>
             <p className='w-full font-[montserrat] text-[#9B4DFF] text-end md:text-xl lg:text-base'><Link>Forgot Password ?</Link></p>
