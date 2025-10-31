@@ -33,6 +33,7 @@ class Volunteer(models.Model):
 
 
 class Organization(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     name = models.CharField(max_length=100)
     date_of_establishment = models.DateField()
     registration_number = models.CharField(max_length=50, unique=True, blank=True, null=True)
@@ -54,7 +55,7 @@ class Organization(models.Model):
 class Admin(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     user = models.OneToOneField(User, on_delete=models.CASCADE)
-    organization = models.ForeignKey('Organization', on_delete=models.CASCADE, related_name='admins')
+    organization = models.OneToOneField('Organization', on_delete=models.CASCADE, related_name='admin')
     phone_number = models.CharField(max_length=15, blank=True)
     job_title = models.CharField(max_length=100, blank=True)
 
@@ -109,6 +110,12 @@ class Participation(models.Model):
         ],
         default='joined'
     )
+    certificate_code = models.CharField(max_length=12, unique=True, blank=True, null=True)
+
+    def save(self, *args, **kwargs):
+        if not self.certificate_code:
+            self.certificate_code = uuid.uuid4().hex[:12].upper()
+        super().save(*args, **kwargs)
 
     class Meta:
         unique_together = ('volunteer', 'event')

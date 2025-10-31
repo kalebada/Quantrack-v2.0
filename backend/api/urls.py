@@ -1,4 +1,6 @@
 from django.urls import path
+from backend import settings
+from django.conf.urls.static import static
 from . import views
 
 urlpatterns = [
@@ -12,6 +14,7 @@ urlpatterns = [
     path('token/refresh/', views.CustomTokenRefreshView.as_view(), name='token_refresh'),
     path('register/', views.register_user),
     path('register-organization/', views.register_organization),
+    path('update-organization/', views.update_organization),
     path('authenticated/', views.authenticated),
     path('logout/', views.logout_user),
     path('organizations/join/', views.join_organization_by_code),
@@ -32,4 +35,7 @@ urlpatterns = [
     path('analytics/my-volunteer-stats/', views.my_volunteer_stats),
     path('analytics/my-admin-stats/', views.my_admin_stats),
     path('analytics/my-organization-stats/', views.my_organization_stats),
-]
+    path('password-reset/', views.PasswordResetRequestView.as_view(), name='password-reset'),
+    path('password-reset-confirm/', views.PasswordResetConfirmView.as_view(), name='password-reset-confirm'),
+    path('generate-certificate/<uuid:participation_id>/', views.generate_certificate, name='generate-certificate'),
+] + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

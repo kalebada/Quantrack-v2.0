@@ -2,6 +2,12 @@ from rest_framework import serializers
 from django.contrib.auth import get_user_model
 from .models import Participation, Volunteer, Admin, Organization, Event
 from datetime import date
+from django.utils.http import urlsafe_base64_decode
+from django.utils.encoding import force_str
+from django.contrib.auth.tokens import PasswordResetTokenGenerator
+from django.core.mail import send_mail
+from django.utils.http import urlsafe_base64_encode
+from django.utils.encoding import force_bytes
 
 User = get_user_model()
 
@@ -20,31 +26,28 @@ class RegisterSerializer(serializers.ModelSerializer):
     confirm_password = serializers.CharField(write_only=True)
     
     # Extra fields for volunteers/admins
-    organization_id = serializers.IntegerField(write_only=True, required=False)
     organization_name = serializers.CharField(write_only=True, required=False)
     city = serializers.CharField(write_only=True, required=False)
     country = serializers.CharField(write_only=True, required=False)
     date_of_birth = serializers.DateField(write_only=True, required=False)
     school_or_organization = serializers.CharField(write_only=True, required=False)
     
-    profile_id = serializers.ReadOnlyField(source='get_profile_id')  # Will compute dynamically
+    profile_id = serializers.ReadOnlyField(source='get_profile_id')
 
     class Meta:
         model = User
         fields = [
             'id', 'email', 'username', 'password', 'confirm_password', 'role',
-            'profile_id', 'organization_id', 'organization_name', 'city', 'country',
+            'profile_id', 'organization_name', 'city', 'country',
             'date_of_birth', 'school_or_organization'
         ]
-    
+
     def validate(self, data):
-        # Password match check
         if data['password'] != data['confirm_password']:
             raise serializers.ValidationError("Passwords do not match.")
         
-        # Admin must have organization_id or organization_name
-        if data['role'] == 'admin' and not (data.get('organization_id') or data.get('organization_name')):
-            raise serializers.ValidationError("Organization ID or organization name is required for admin registration.")
+        if data['role'] == 'admin' and not data.get('organization_name'):
+            raise serializers.ValidationError("Organization name is required for admin registration.")
         
         return data
 
@@ -55,7 +58,6 @@ class RegisterSerializer(serializers.ModelSerializer):
 
     def create(self, validated_data):
         # Pop extra fields
-        organization_id = validated_data.pop('organization_id', None)
         organization_name = validated_data.pop('organization_name', None)
         city = validated_data.pop('city', None)
         country = validated_data.pop('country', None)
@@ -70,42 +72,36 @@ class RegisterSerializer(serializers.ModelSerializer):
             password=validated_data['password'],
             role=validated_data['role']
         )
-        user.is_active = False  # Email verification required
+        user.is_active = False
         user.save()
 
-        # Volunteer profile
+        # Volunteer flow
         if user.role == 'volunteer':
             volunteer = Volunteer.objects.create(
                 user=user,
                 date_of_birth=date_of_birth,
                 school_or_organization=school_or_organization or ""
             )
-            user._profile_obj = volunteer  # Temporary for serializer field
+            user._profile_obj = volunteer
 
-        # Admin profile
+        # Admin flow: always create new org
         elif user.role == 'admin':
-            if organization_id:
-                try:
-                    organization = Organization.objects.get(id=organization_id)
-                except Organization.DoesNotExist:
-                    user.delete()
-                    raise serializers.ValidationError("Organization not found.")
-            else:  # create new organization
-                organization = Organization.objects.create(
-                    name=organization_name,
-                    date_of_establishment=date.today(),
-                    organization_type="Non-profit",
-                    address=f"Address of {organization_name}",
-                    city=city or "Unknown",
-                    country=country or "Unknown"
-                )
+            organization = Organization.objects.create(
+                name=organization_name,
+                date_of_establishment=date.today(),
+                organization_type="Non-profit",
+                address=f"Address of {organization_name}",
+                city=city or "Unknown",
+                country=country or "Unknown",
+                admin=user
+            )
             admin = Admin.objects.create(user=user, organization=organization)
-            user._profile_obj = admin  # Temporary for serializer field
+            user._profile_obj = admin
 
         return user
 
     def get_profile_id(self, obj):
-        """Dynamically return profile ID (volunteer/admin)"""
+        """Return profile ID dynamically"""
         if hasattr(obj, '_profile_obj'):
             return obj._profile_obj.id
         try:
@@ -115,6 +111,7 @@ class RegisterSerializer(serializers.ModelSerializer):
                 return obj.admin.id
         except:
             return None
+        
 
 
 class VolunteerSerializer(serializers.ModelSerializer):
@@ -140,11 +137,12 @@ class VolunteerSerializer(serializers.ModelSerializer):
         if age < min_age:
             raise serializers.ValidationError(f"Volunteer must be at least {min_age} years old.")
         return value
+    
 
 class AdminSerializer(serializers.ModelSerializer):
     user = UserSerializer(read_only=True)
     profile_id = serializers.ReadOnlyField(source='id')  
-    organization = serializers.PrimaryKeyRelatedField(queryset=Organization.objects.all())
+    organization = serializers.PrimaryKeyRelatedField(queryset=Organization.objects.filter(admin__isnull=True))
 
     class Meta:
         model = Admin
@@ -152,28 +150,43 @@ class AdminSerializer(serializers.ModelSerializer):
 
 
 class OrganizationSerializer(serializers.ModelSerializer):
+    id = serializers.UUIDField(read_only=True)
     join_code = serializers.ReadOnlyField()
-    admins = serializers.SerializerMethodField()  
+    admin = serializers.SerializerMethodField()
 
     class Meta:
         model = Organization
-        fields = ['id', 'name', 'date_of_establishment', 'registration_number', 'organization_type',
-                  'website', 'description', 'logo', 'address', 'city', 'country', 'join_code', 'admins']
-        
-
-    def get_admins(self, obj):
-        admins = obj.admins.all()
-        return [
-            {"id": admin.id, "username": admin.user.username, "email": admin.user.email}
-            for admin in admins
+        fields = [
+            'id',
+            'name',
+            'date_of_establishment',
+            'registration_number',
+            'organization_type',
+            'website',
+            'description',
+            'logo',
+            'address',
+            'city',
+            'country',
+            'join_code',
+            'admin',
         ]
-    
+
+    def get_admin(self, obj):
+        admin = getattr(obj, 'admin', None)
+        if admin:
+            return {
+                "id": str(admin.id),
+                "username": admin.user.username,
+                "email": admin.user.email,
+            }
+        return None
+
     def validate_date_of_establishment(self, value):
         from datetime import date
         if value > date.today():
             raise serializers.ValidationError("Date of establishment cannot be in the future.")
         return value
-        
 
 
 
@@ -206,3 +219,63 @@ class ParticipationSerializer(serializers.ModelSerializer):
             'date_participated', 'hours_completed', 'status'
         ]
         read_only_fields = ['date_participated']
+
+
+class PasswordResetRequestSerializer(serializers.Serializer):
+    email = serializers.EmailField()
+
+    def validate_email(self, value):
+        if not User.objects.filter(email=value).exists():
+            raise serializers.ValidationError("User with this email does not exist.")
+        return value
+
+    def save(self, request):
+        user = User.objects.get(email=self.validated_data['email'])
+        token_generator = PasswordResetTokenGenerator()
+        token = token_generator.make_token(user)
+        uidb64 = urlsafe_base64_encode(force_bytes(user.pk))
+
+        reset_link = f"{request.scheme}://{request.get_host()}/api/password-reset-confirm/{uidb64}/{token}/"
+
+        send_mail(
+            subject="Password Reset Request",
+            message=f"Click the link below to reset your password:\n{reset_link}",
+            from_email="no-reply@quantrack.com",
+            recipient_list=[user.email],
+        )
+
+        return {"message": "Password reset link sent to your email."}
+
+
+class PasswordResetConfirmSerializer(serializers.Serializer):
+    uidb64 = serializers.CharField()
+    token = serializers.CharField()
+    new_password = serializers.CharField(write_only=True)
+    confirm_password = serializers.CharField(write_only=True)
+
+    def validate(self, data):
+        if data['new_password'] != data['confirm_password']:
+            raise serializers.ValidationError("Passwords do not match.")
+        return data
+
+    def save(self):
+        try:
+            uid = force_str(urlsafe_base64_decode(self.validated_data['uidb64']))
+            user = User.objects.get(pk=uid)
+        except (TypeError, ValueError, OverflowError, User.DoesNotExist):
+            raise serializers.ValidationError("Invalid user ID.")
+
+        token_generator = PasswordResetTokenGenerator()
+        if not token_generator.check_token(user, self.validated_data['token']):
+            raise serializers.ValidationError("Invalid or expired token.")
+
+        user.set_password(self.validated_data['new_password'])
+        user.save()
+        return {"message": "Password has been reset successfully."}
+
+
+
+class VolunteerCertificateSerializer(serializers.Serializer):
+    volunteer_id = serializers.UUIDField()
+    start_date = serializers.DateField(required=False)
+    end_date = serializers.DateField(required=False)

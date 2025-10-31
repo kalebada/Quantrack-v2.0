@@ -3,7 +3,7 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.response import Response
 from .models import Volunteer, Admin, User, Organization, Event, Participation
-from .serializers import VolunteerSerializer, AdminSerializer, OrganizationSerializer, EventSerializer, ParticipationSerializer
+from .serializers import VolunteerSerializer, AdminSerializer, OrganizationSerializer, EventSerializer, ParticipationSerializer, PasswordResetConfirmSerializer, PasswordResetRequestSerializer
 from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 from rest_framework import status
 from uuid import UUID, uuid4
@@ -18,6 +18,19 @@ from django.utils.encoding import force_bytes
 from django.utils.http import urlsafe_base64_decode
 from django.contrib.auth import get_user_model
 from django.db.models import Count, Sum, Q, Avg
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework import status
+from django.http import HttpResponse
+from reportlab.pdfgen import canvas
+from reportlab.lib.pagesizes import A4
+from reportlab.lib import colors
+from reportlab.lib.units import cm
+from io import BytesIO
+from datetime import datetime
+from api.utils.certificates import generate_volunteer_certificate
+from django.http import FileResponse
+
 
 User = get_user_model()
 
@@ -406,6 +419,42 @@ def register_organization(request):
         organization = serializer.save()
         return Response(OrganizationSerializer(organization).data, status=201)
     return Response(serializer.errors, status=400)
+
+
+@api_view(['PATCH'])
+@permission_classes([IsAuthenticated, IsAdmin, IsEmailVerified])
+def update_organization(request):
+    """
+    Update an organization by its UUID.
+    Admin can only update their own organization.
+    Supports updating the logo via file upload.
+    """
+    try:
+        admin = Admin.objects.get(user=request.user)
+        organization = admin.organization
+
+        # Security check: admin can only update their own organization
+        if str(organization.id) != request.data.get('id'):
+            return Response({'error': 'You can only update your own organization.'}, status=403)
+
+        # Pass request context to handle file uploads
+        serializer = OrganizationSerializer(
+            organization,
+            data=request.data,
+            partial=True,
+            context={'request': request}  # ensures request.FILES is processed
+        )
+
+        if serializer.is_valid():
+            updated_org = serializer.save()
+            return Response(OrganizationSerializer(updated_org).data)
+
+        return Response(serializer.errors, status=400)
+
+    except Admin.DoesNotExist:
+        return Response({'error': 'Admin profile not found'}, status=404)
+    except Organization.DoesNotExist:
+        return Response({'error': 'Organization not found'}, status=404)
 
 
 # 📅 --- Event Management ---
@@ -826,3 +875,55 @@ def my_organization_stats(request):
         "total_hours": total_hours
     }
     return Response(data)
+
+
+
+#  -- Reset Password View ---
+
+class PasswordResetRequestView(APIView):
+    def post(self, request):
+        serializer = PasswordResetRequestSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        serializer.save(request=request)
+        return Response({"detail": "Password reset link sent."}, status=status.HTTP_200_OK)
+
+
+class PasswordResetConfirmView(APIView):
+    def post(self, request):
+        serializer = PasswordResetConfirmSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return Response({"detail": "Password has been reset successfully."}, status=status.HTTP_200_OK)
+
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def generate_certificate(request, participation_id):
+    """
+    Generate a certificate PDF for a specific participation.
+    """
+    try:
+        participation = Participation.objects.get(id=participation_id, volunteer__user=request.user)
+    except Participation.DoesNotExist:
+        return Response({"error": "Participation not found."}, status=404)
+    
+    if participation.status != 'completed':
+        return Response({"error": "Certificate can only be generated for completed events."}, status=400)
+
+    # Generate a unique certificate code
+    certificate_code = str(uuid4()).replace('-', '').upper()[:10]
+
+    # Generate the PDF
+    full_path, buffer = generate_volunteer_certificate(
+        volunteer=participation.volunteer,
+        event=participation.event,
+        certificate_code=certificate_code
+    )
+
+    # Save the certificate code in Participation (optional)
+    participation.certificate_code = certificate_code
+    participation.save()
+
+    # Return PDF file as response
+    return FileResponse(buffer, as_attachment=True, filename=f"Certificate_{participation.event.name}.pdf")
