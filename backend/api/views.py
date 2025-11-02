@@ -28,8 +28,9 @@ from reportlab.lib import colors
 from reportlab.lib.units import cm
 from io import BytesIO
 from datetime import datetime
-from api.utils.certificates import generate_volunteer_certificate
+from api.utils.certificates import generate_volunteer_certificate, generate_summary_certificate
 from django.http import FileResponse
+
 
 
 User = get_user_model()
@@ -927,3 +928,55 @@ def generate_certificate(request, participation_id):
 
     # Return PDF file as response
     return FileResponse(buffer, as_attachment=True, filename=f"Certificate_{participation.event.name}.pdf")
+
+
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated, IsVolunteer, IsEmailVerified])
+def generate_summary_certificate_view(request):
+    """
+    Generate a summary certificate for a volunteer across a chosen time range.
+    """
+    try:
+        volunteer = request.user.volunteer
+    except AttributeError:
+        return Response({"error": "Volunteer profile not found."}, status=404)
+
+    start_date = request.data.get('start_date')
+    end_date = request.data.get('end_date')
+
+    # Convert to datetime objects
+    try:
+        start_date = datetime.strptime(start_date, '%Y-%m-%d').date()
+        end_date = datetime.strptime(end_date, '%Y-%m-%d').date()
+    except Exception:
+        return Response({"error": "Invalid date format. Use YYYY-MM-DD."}, status=400)
+
+    # Filter participations in that range
+    participations = Participation.objects.filter(
+        volunteer=volunteer,
+        status='completed',
+        event__date__range=(start_date, end_date)
+    )
+
+    if not participations.exists():
+        return Response({"error": "No completed participations found in this range."}, status=404)
+
+    # Calculate total service hours
+    total_hours = sum(p.event.service_hours for p in participations)
+
+    # Generate unique code
+    certificate_code = str(uuid4()).replace('-', '').upper()[:10]
+
+    # ✅ Pass all arguments properly
+    pdf_path, buffer = generate_summary_certificate(
+        volunteer=volunteer,
+        participations=participations,
+        start_date=start_date,
+        end_date=end_date,
+        total_hours=total_hours,
+        certificate_code=certificate_code
+    )
+
+    return FileResponse(buffer, as_attachment=True, filename=f"Summary_Certificate_{volunteer.user.username}.pdf")

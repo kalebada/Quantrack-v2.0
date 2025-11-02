@@ -1,3 +1,4 @@
+from django.views.decorators.csrf import csrf_exempt
 from django.urls import path
 from backend import settings
 from django.conf.urls.static import static
@@ -38,4 +39,5 @@ urlpatterns = [
     path('password-reset/', views.PasswordResetRequestView.as_view(), name='password-reset'),
     path('password-reset-confirm/', views.PasswordResetConfirmView.as_view(), name='password-reset-confirm'),
     path('generate-certificate/<uuid:participation_id>/', views.generate_certificate, name='generate-certificate'),
+    path('generate-summary-certificate/', csrf_exempt(views.generate_summary_certificate_view), name='generate-summary-certificate'),
 ] + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

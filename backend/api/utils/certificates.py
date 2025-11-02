@@ -114,3 +114,75 @@ def generate_volunteer_certificate(volunteer, event, certificate_code):
 
     buffer.seek(0)
     return full_path, buffer
+
+
+
+
+def generate_summary_certificate(volunteer, participations, start_date, end_date, total_hours, certificate_code):
+    # File setup
+    filename = f"Summary_{volunteer.user.username}_{certificate_code}.pdf"
+    save_path = os.path.join(settings.MEDIA_ROOT, 'certificates')
+    os.makedirs(save_path, exist_ok=True)
+    full_path = os.path.join(save_path, filename)
+    buffer = BytesIO()
+
+    c = canvas.Canvas(buffer, pagesize=letter)
+    width, height = letter
+
+    # Background color (matching your site’s dark theme)
+    c.setFillColorRGB(0.07, 0.07, 0.1)  # Dark gray background
+    c.rect(0, 0, width, height, fill=1)
+
+    # Title section
+    c.setFillColor(HexColor("#ffffff"))
+    c.setFont("Helvetica-Bold", 28)
+    c.drawCentredString(width / 2, height - 100, "Quantrack Volunteer Summary Certificate")
+
+    # Subtitle
+    c.setFont("Helvetica", 16)
+    c.drawCentredString(width / 2, height - 130, f"Presented to {volunteer.user.username}")
+    c.setFont("Helvetica-Oblique", 14)
+    c.drawCentredString(width / 2, height - 160, f"For outstanding contribution between {start_date} and {end_date}")
+
+    # Total hours
+    c.setFont("Helvetica-Bold", 20)
+    c.setFillColor(HexColor("#9b5de5"))  # purple accent from site
+    c.drawCentredString(width / 2, height - 200, f"Total Service Hours: {total_hours}h")
+
+    # Divider line
+    c.setStrokeColor(HexColor("#9b5de5"))
+    c.line(100, height - 220, width - 100, height - 220)
+
+    # List of events
+    y = height - 250
+    c.setFont("Helvetica", 12)
+    c.setFillColor(HexColor("#ffffff"))
+    for p in participations[:6]:  # show up to 6 events
+        c.drawString(120, y, f"- {p.event.name} ({p.event.organization.name}) – {p.hours_completed}h")
+        y -= 20
+
+    if len(participations) > 6:
+        c.drawString(120, y, f"... and {len(participations)-6} more events")
+
+    # QR Code (bottom-right)
+    qr_url = f"https://quantrack.com/verify/{certificate_code}"
+    qr_img = qrcode.make(qr_url)
+    qr_buffer = BytesIO()
+    qr_img.save(qr_buffer)
+    qr_buffer.seek(0)
+    c.drawImage(ImageReader(qr_buffer), width - 150, 40, width=100, height=100, mask='auto')
+
+    # Certificate code
+    c.setFont("Helvetica-Oblique", 10)
+    c.setFillColor(HexColor("#cccccc"))
+    c.drawString(50, 50, f"Certificate Code: {certificate_code}")
+    c.drawString(50, 35, f"Verify at: {qr_url}")
+
+    c.showPage()
+    c.save()
+
+    with open(full_path, 'wb') as f:
+        f.write(buffer.getvalue())
+
+    buffer.seek(0)
+    return full_path, buffer
