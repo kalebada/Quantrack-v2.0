@@ -2,7 +2,7 @@ from os import path
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.response import Response
-from .models import Volunteer, Admin, User, Organization, Event, Participation
+from .models import Volunteer, Admin, User, Organization, Event, Participation, Membership
 from .serializers import VolunteerSerializer, AdminSerializer, OrganizationSerializer, EventSerializer, ParticipationSerializer, PasswordResetConfirmSerializer, PasswordResetRequestSerializer
 from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 from rest_framework import status
@@ -306,21 +306,79 @@ def join_organization_by_code(request):
         volunteer = Volunteer.objects.get(user=request.user)
         organization = Organization.objects.get(join_code=join_code)
 
-        if organization in volunteer.organizations.all():
-            return Response({'success': False, 'message': 'Already a member of this organization'}, status=400)
+        membership, created = Membership.objects.get_or_create(
+            volunteer=volunteer,
+            organization=organization,
+            defaults={'role': 'volunteer', 'status': 'pending'}
+        )
 
-        volunteer.organizations.add(organization)
-        volunteer.save()
+        if not created:
+            if membership.status == 'active':
+                return Response({'success': False, 'message': 'Already a member of this organization'}, status=400)
+            else:
+                membership.status = 'pending'
+                membership.save()
 
-        orgs = volunteer.organizations.values('id', 'name')
         return Response({
             'success': True,
-            'message': f'Joined {organization.name} successfully',
-            'joined_organizations': list(orgs)
-        })
+            'message': f'Requested to join {organization.name} (awaiting approval)',
+            'membership': {
+                'organization': organization.name,
+                'role': membership.role,
+                'status': membership.status
+            }
+        }, status=201)
 
     except Organization.DoesNotExist:
         return Response({'success': False, 'message': 'Invalid join code'}, status=404)
+
+
+@api_view(['PATCH'])
+@permission_classes([IsAuthenticated, IsAdmin])
+def approve_membership(request, membership_id):
+    admin = Admin.objects.get(user=request.user)
+    membership = Membership.objects.get(id=membership_id)
+
+    if membership.organization != admin.organization:
+        return Response({'error': 'You can only manage your own organization'}, status=403)
+
+    membership.status = 'active'
+    membership.save()
+    return Response({'message': 'Membership approved successfully'})
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated, IsAdmin])
+def list_pending_members(request):
+    """Admin views all pending join requests."""
+    admin = Admin.objects.get(user=request.user)
+    pending = Membership.objects.filter(organization=admin.organization, status='pending') \
+        .select_related('volunteer__user')
+
+    data = [
+        {
+            'membership_id': str(m.id),
+            'volunteer_name': m.volunteer.user.username,
+            'email': m.volunteer.user.email,
+            'join_date': m.join_date
+        } for m in pending
+    ]
+    return Response(data, status=200)
+
+
+@api_view(['PATCH'])
+@permission_classes([IsAuthenticated, IsAdmin])
+def reject_member(request, membership_id):
+    """Admin rejects a volunteer’s membership."""
+    admin = Admin.objects.get(user=request.user)
+    membership = Membership.objects.get(id=membership_id)
+
+    if membership.organization != admin.organization:
+        return Response({'error': 'You can only manage your own organization'}, status=403)
+
+    membership.status = 'inactive'
+    membership.save()
+    return Response({'message': 'Membership rejected'})
     
 
 @api_view(['POST'])
@@ -336,18 +394,21 @@ def quit_organization_by_code(request):
         volunteer = Volunteer.objects.get(user=request.user)
         organization = Organization.objects.get(join_code=join_code)
 
-        if organization not in volunteer.organizations.all():
-            return Response({'success': False, 'message': 'You are not a member of this organization'}, status=400)
+        membership = Membership.objects.filter(volunteer=volunteer, organization=organization, status='active').first()
+        if not membership:
+            return Response({'success': False, 'message': 'You are not an active member of this organization'}, status=400)
 
-        volunteer.organizations.remove(organization)
-        volunteer.save()
+        membership.status = 'left'
+        membership.save()
 
-        orgs = volunteer.organizations.values('id', 'name')
+        remaining = Membership.objects.filter(volunteer=volunteer, status='active').select_related('organization')
         return Response({
             'success': True,
-            'message': f'You have quit {organization.name}',
-            'remaining_organizations': list(orgs)
-        })
+            'message': f'You have left {organization.name}',
+            'remaining_organizations': [
+                {'id': str(m.organization.id), 'name': m.organization.name} for m in remaining
+            ]
+        }, status=200)
 
     except Organization.DoesNotExist:
         return Response({'success': False, 'message': 'Invalid join code'}, status=404)
@@ -466,7 +527,12 @@ def get_my_events_as_volunteer(request):
     """Get all events from organizations the volunteer belongs to."""
     try:
         volunteer = Volunteer.objects.get(user=request.user)
-        events = Event.objects.filter(organization__in=volunteer.organizations.all())
+        events = Event.objects.filter(
+            organization__in=Membership.objects.filter(
+                volunteer=volunteer,
+                status='active'
+            ).values_list('organization', flat=True)
+        )
         serializer = EventSerializer(events, many=True)
         return Response({'events': serializer.data}, status=200)
     except Volunteer.DoesNotExist:
@@ -750,14 +816,15 @@ def volunteer_stats(request):
 
     # Volunteers per organization
     org_stats = (
-        Volunteer.objects
-        .values('organizations__name')
-        .annotate(volunteer_count=Count('id'))
+        Membership.objects
+        .filter(status='active')
+        .values('organization__name')
+        .annotate(volunteer_count=Count('volunteer'))
         .order_by('-volunteer_count')
     )
 
     org_stats_list = [
-        {'organization': item['organizations__name'] or 'No Org', 'volunteer_count': item['volunteer_count']}
+        {'organization': item['organization__name'] or 'No Org', 'volunteer_count': item['volunteer_count']}
         for item in org_stats
     ]
 

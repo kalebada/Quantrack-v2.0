@@ -1,4 +1,5 @@
 from django.db import models
+from django.utils import timezone
 from django.contrib.auth.models import AbstractUser
 import uuid
 
@@ -26,7 +27,6 @@ class Volunteer(models.Model):
     user = models.OneToOneField(User, on_delete=models.CASCADE)
     date_of_birth = models.DateField()
     school_or_organization = models.CharField(max_length=100)
-    organizations = models.ManyToManyField('Organization', blank=True, related_name='volunteers')
 
     def __str__(self):
         return f"{self.user.username} ({self.school_or_organization})"
@@ -64,12 +64,28 @@ class Admin(models.Model):
     
 
 class Membership(models.Model):
-    volunteer = models.ForeignKey(Volunteer, on_delete=models.CASCADE)
-    organization = models.ForeignKey(Organization, on_delete=models.CASCADE)
-    role = models.CharField(max_length=50, default="Volunteer")
-    date_joined = models.DateField(auto_now_add=True)
-    verified = models.BooleanField(default=False)
+    ROLE_CHOICES = [
+        ('volunteer', 'Volunteer'),
+        ('executive', 'Executive'),
+        ('admin', 'Admin'),
+    ]
+    STATUS_CHOICES = [
+        ('active', 'Active'),
+        ('inactive', 'Inactive'),
+        ('pending', 'Pending'),
+    ]
 
+    volunteer = models.ForeignKey('Volunteer', on_delete=models.CASCADE)
+    organization = models.ForeignKey('Organization', on_delete=models.CASCADE)
+    role = models.CharField(max_length=20, choices=ROLE_CHOICES, default='volunteer')
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='active')
+    join_date = models.DateTimeField(default=timezone.now)
+
+    class Meta:
+        unique_together = ('volunteer', 'organization')
+
+    def __str__(self):
+        return f"{self.volunteer} - {self.organization} ({self.role})"
 
 
 class Event(models.Model):

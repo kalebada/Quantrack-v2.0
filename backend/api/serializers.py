@@ -1,6 +1,6 @@
 from rest_framework import serializers
 from django.contrib.auth import get_user_model
-from .models import Participation, Volunteer, Admin, Organization, Event
+from .models import Participation, Volunteer, Admin, Organization, Event, Membership
 from datetime import date
 from django.utils.http import urlsafe_base64_decode
 from django.utils.encoding import force_str
@@ -116,16 +116,29 @@ class RegisterSerializer(serializers.ModelSerializer):
 
 class VolunteerSerializer(serializers.ModelSerializer):
     user = UserSerializer(read_only=True)
-    profile_id = serializers.ReadOnlyField(source='id') 
-    organizations_names = serializers.SerializerMethodField()
+    profile_id = serializers.ReadOnlyField(source='id')  
+    memberships = serializers.SerializerMethodField()
     date_of_birth = serializers.DateField()
 
     class Meta:
         model = Volunteer
-        fields = ['profile_id', 'user', 'date_of_birth', 'school_or_organization', 'organizations', 'organizations_names']
+        fields = [
+            'profile_id', 'user', 'date_of_birth',
+            'school_or_organization', 'memberships'
+        ]
 
-    def get_organizations_names(self, obj):
-        return [org.name for org in obj.organizations.all()]
+    def get_memberships(self, obj):
+        memberships = Membership.objects.filter(volunteer=obj).select_related('organization')
+        return [
+            {
+                'organization_id': str(m.organization.id),
+                'organization_name': m.organization.name,
+                'role': m.role,
+                'status': m.status,
+                'join_date': m.join_date
+            }
+            for m in memberships
+        ]
     
     def validate_date_of_birth(self, value):
         from datetime import date
@@ -198,7 +211,28 @@ class JoinOrganizationSerializer(serializers.Serializer):
             organization = Organization.objects.get(join_code=value)
         except Organization.DoesNotExist:
             raise serializers.ValidationError("Invalid join code.")
+        self.organization = organization
         return value
+
+    def save(self, volunteer):
+        membership, created = Membership.objects.get_or_create(
+            volunteer=volunteer,
+            organization=self.organization,
+            defaults={'status': 'pending'}
+        )
+        if not created:
+            raise serializers.ValidationError("You have already joined or have a pending request.")
+        return membership
+    
+
+
+class OrganizationMemberListSerializer(serializers.ModelSerializer):
+    volunteer_name = serializers.CharField(source='volunteer.user.username', read_only=True)
+    email = serializers.CharField(source='volunteer.user.email', read_only=True)
+
+    class Meta:
+        model = Membership
+        fields = ['volunteer_name', 'email', 'role', 'status', 'join_date']
     
 
 class EventSerializer(serializers.ModelSerializer):
