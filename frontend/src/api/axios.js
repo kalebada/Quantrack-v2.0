@@ -5,25 +5,24 @@ const axiosInstance = axios.create({
   headers: {
     "Content-Type": "application/json",
   },
-  withCredentials: true, 
+  withCredentials: true, // REQUIRED for HTTP-only cookie auth
 });
 
+// DO NOT attach Authorization header manually
+// Backend handles auth using cookies
 axiosInstance.interceptors.request.use(
   (config) => {
-    const token = localStorage.getItem("authToken");
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`;
-    }
     return config;
   },
   (error) => Promise.reject(error)
 );
 
+// Basic response handling
 axiosInstance.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.response?.status === 401) {
-      console.warn("Unauthorized! Redirecting to login...");
+      console.warn("Unauthorized request (401)");
     }
     return Promise.reject(error);
   }
