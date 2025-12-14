@@ -8,8 +8,7 @@ const axiosInstance = axios.create({
   withCredentials: true, // REQUIRED for HTTP-only cookie auth
 });
 
-// DO NOT attach Authorization header manually
-// Backend handles auth using cookies
+
 axiosInstance.interceptors.request.use(
   (config) => {
     return config;
@@ -17,7 +16,7 @@ axiosInstance.interceptors.request.use(
   (error) => Promise.reject(error)
 );
 
-// Basic response handling
+
 axiosInstance.interceptors.response.use(
   (response) => response,
   (error) => {
