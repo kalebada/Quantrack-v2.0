@@ -88,7 +88,7 @@ const Login = () => {
           <button
             type="button"
             onClick={() => setIsMember(true)}
-            className={`w-full p-2 rounded md:text-xl lg:text-base transition-all duration-300 ${
+            className={`w-full p-2 rounded md:text-xl lg:text-base transition-all duration-300 cursor-pointer ${
               isMember ? "bg-[#9B4DFF]" : ""
             }`}
           >
@@ -98,7 +98,7 @@ const Login = () => {
           <button
             type="button"
             onClick={() => setIsMember(false)}
-            className={`w-full p-2 rounded md:text-xl lg:text-base transition-all duration-300 ${
+            className={`w-full p-2 rounded md:text-xl lg:text-base transition-all duration-300  cursor-pointer ${
               !isMember ? "bg-[#9B4DFF]" : ""
             }`}
           >
@@ -140,7 +140,7 @@ const Login = () => {
         <button 
           type="submit"
           disabled={loading}
-          className='w-full py-3 bg-[#9B4DFF] text-white flex items-center justify-center gap-2 rounded-lg'
+          className='w-full py-3 bg-[#9B4DFF] text-white flex items-center justify-center gap-2 rounded-lg cursor-pointer'
         >
           {loading ? "Logging in..." : "Log In"}
           <LogIn />
@@ -151,7 +151,7 @@ const Login = () => {
 
       <button 
         onClick={handleGoogleLogin}
-        className='bg-zinc-900 w-full md:w-[70%] lg:w-[32%] p-3 flex justify-center items-center text-white gap-2 rounded-lg mb-6'
+        className='bg-zinc-900 w-full md:w-[70%] lg:w-[32%] p-3 flex justify-center items-center text-white gap-2 rounded-lg mb-6 cursor-pointer'
       >
         <img src={google} alt="" className='w-[8%] md:w-[4%] lg:w-[6%]' />
         Sign in with Google
@@ -159,7 +159,7 @@ const Login = () => {
 
       <p className='text-gray-400 text-sm md:text-xl lg:text-sm flex gap-2 items-center'>
         <span>Don't have an account ?</span>
-        <span className='text-[#9B4DFF] underline'>
+        <span className='text-[#9B4DFF]'>
           <Link to="/signup">Sign Up</Link>
         </span>
       </p>

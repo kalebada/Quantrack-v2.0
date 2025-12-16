@@ -79,14 +79,14 @@ const SignUp = () => {
             <button
               type="button"
               onClick={() => setIsMember(true)}
-              className={`w-full p-2 rounded md:text-xl lg:text-base transition-all duration-300 ${isMember ? "bg-[#9B4DFF]" : ""}`}
+              className={`w-full p-2 rounded md:text-xl lg:text-base transition-all duration-300 cursor-pointer ${isMember ? "bg-[#9B4DFF]" : ""}`}
             >
               Member
             </button>
             <button
               type="button"
               onClick={() => setIsMember(false)}
-              className={`w-full p-2 rounded md:text-xl lg:text-base transition-all duration-300 ${!isMember ? "bg-[#9B4DFF]" : ""}`}
+              className={`w-full p-2 rounded md:text-xl lg:text-base transition-all duration-300 cursor-pointer ${!isMember ? "bg-[#9B4DFF]" : ""}`}
             >
               Team Admin
             </button>
@@ -182,7 +182,7 @@ const SignUp = () => {
           </div>
           {errors.terms && <p className="text-red-400 text-sm">{errors.terms.message}</p>}
 
-          <button className='w-full py-3 bg-[#9B4DFF] text-white rounded-lg'>Create Account</button>
+          <button className='w-full py-3 bg-[#9B4DFF] text-white rounded-lg cursor-pointer'>Create Account</button>
         </form>
       ) : (
 
@@ -190,8 +190,8 @@ const SignUp = () => {
         <form onSubmit={handleSubmit(onSubmit)} className='w-full md:w-[70%] lg:w-[40%] flex flex-col justify-center items-center gap-6'>
 
           <div className='flex justify-center items-center gap-2 w-full bg-zinc-900 rounded-lg p-2'>
-            <button type="button" onClick={() => setIsMember(true)} className={`w-full p-2 rounded ${isMember ? "bg-[#9B4DFF]" : ""}`}>Member</button>
-            <button type="button" onClick={() => setIsMember(false)} className={`w-full p-2 rounded ${!isMember ? "bg-[#9B4DFF]" : ""}`}>Team Admin</button>
+            <button type="button" onClick={() => setIsMember(true)} className={`w-full p-2 rounded cursor-pointer ${isMember ? "bg-[#9B4DFF]" : ""}`}>Member</button>
+            <button type="button" onClick={() => setIsMember(false)} className={`w-full p-2 rounded cursor-pointer ${!isMember ? "bg-[#9B4DFF]" : ""}`}>Team Admin</button>
           </div>
 
           <h1 className='w-full text-white font-[montserrat] text-xl'>Team Details</h1>
@@ -336,7 +336,7 @@ const SignUp = () => {
           </div>
           {errors.info && <p className="text-red-400 text-sm">{errors.info.message}</p>}
 
-          <button className='w-full py-3 bg-[#9B4DFF] text-white rounded-lg'>
+          <button className='w-full py-3 bg-[#9B4DFF] text-white rounded-lg cursor-pointer'>
             Register Team
           </button>
         </form>
@@ -344,7 +344,7 @@ const SignUp = () => {
 
       {/* Google Button */}
       <p className='text-white font-[montserrat] my-4 text-sm'>Or Continue With</p>
-      <button className='bg-zinc-900 w-full md:w-[70%] lg:w-[40%] p-3 flex justify-center items-center text-white rounded-lg mb-6'>
+      <button className='bg-zinc-900 w-full md:w-[70%] lg:w-[40%] p-3 flex justify-center items-center text-white gap-2 rounded-lg mb-6 cursor-pointer'>
         <img src={google} alt="" className='w-[8%]' /> Sign in with Google
       </button>
 
