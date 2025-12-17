@@ -13,8 +13,8 @@ const Volunteer = () => {
                     <h2 className='text-gray-400 font-[montserrat] w-[90%] md:text-xl lg:text-base'>Track your engagement and multiply your impact</h2>
                 </div>
                 <div className='w-full flex justify-start lg:justify-end items-center gap-2 lg:gap-4 text-white md:text-xl lg:text-base'>
-                    <button className=' bg-[#9B4DFF] px-4 py-2 rounded font-[montserrat] flex justify-center items-center gap-2'><QrCode size={22} />Code</button>
-                    <button className=' bg-[#9B4DFF] px-4 py-2 rounded font-[montserrat] flex justify-center items-center gap-2 size={22}'><Plus />Join Organization</button>
+                    <button className=' bg-[#9B4DFF] px-4 py-2 rounded font-[montserrat] flex justify-center items-center gap-2 cursor-pointer'><QrCode size={22} />Code</button>
+                    <button className=' bg-[#9B4DFF] px-4 py-2 rounded font-[montserrat] flex justify-center items-center gap-2 size={22} cursor-pointer'><Plus />Join Organization</button>
                 </div>
             </div>                 
             <div className='w-full flex flex-col justify-start items-start text-white gap-4'>
