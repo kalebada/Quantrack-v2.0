@@ -24,6 +24,9 @@ const SignUp = () => {
     try {
       let payload = {
         email: data.email,
+         username: isMember
+          ? `${data.firstName} ${data.lastName}`
+          : `${data.adminfirstname} ${data.adminlastname}`,
         password: data.password,
         confirm_password: data.password,
         role: isMember ? "volunteer" : "admin",
@@ -51,7 +54,7 @@ const SignUp = () => {
         payload.job_title = data.position;
       }
 
-      const response = await axios.post("/register/", payload, { withCredentials: true });
+      const response = await axios.post("/register/", payload);
 
       alert("Account created! Please verify your email.");
       reset();
@@ -59,6 +62,9 @@ const SignUp = () => {
       console.log("SIGNUP ERROR:", err);
       alert(err.response?.data?.error || "Signup failed");
     }
+  };
+  const handleGoogleLogin = () => {
+    alert("Google login coming soon!");
   };
 
   return (
@@ -344,8 +350,8 @@ const SignUp = () => {
 
       {/* Google Button */}
       <p className='text-white font-[montserrat] my-4 text-sm'>Or Continue With</p>
-      <button className='bg-zinc-900 w-full md:w-[70%] lg:w-[40%] p-3 flex justify-center items-center text-white gap-2 rounded-lg mb-6 cursor-pointer'>
-        <img src={google} alt="" className='w-[8%]' /> Sign in with Google
+      <button onClick={handleGoogleLogin} className='bg-zinc-900 w-full md:w-[70%] lg:w-[40%] p-3 flex justify-center items-center text-white gap-2 rounded-lg mb-6 cursor-pointer'>
+        <img src={google} alt="" className='w-[8%] md:w-[4%] lg:w-[6%]' /> Sign in with Google
       </button>
 
       {/* Login Link */}
