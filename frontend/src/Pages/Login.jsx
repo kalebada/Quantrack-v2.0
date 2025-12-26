@@ -30,6 +30,7 @@ const Login = () => {
 
       //  Save token for future requests
       localStorage.setItem("authToken", token);
+      api.defaults.headers.common["Authorization"] = `Bearer ${token}`;
 
       //  Get authenticated user details
       const me = await api.get("/authenticated/");
@@ -133,7 +134,7 @@ const Login = () => {
         </div>
 
         <p className='w-full text-[#9B4DFF] text-end md:text-xl lg:text-base'>
-          <Link>Forgot Password ?</Link>
+          <Link to="/forgotpassword">Forgot Password ?</Link>
         </p>
 
         {/* LOGIN BUTTON */}
