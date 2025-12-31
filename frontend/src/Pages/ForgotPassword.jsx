@@ -76,7 +76,7 @@ const ForgotPassword = () => {
         <button
           type="submit"
           disabled={loading}
-          className="bg-[#9B4DFF] py-3 rounded-lg text-white font-semibold hover:opacity-90 transition"
+          className="bg-[#9B4DFF] py-3 rounded-lg text-white font-semibold hover:opacity-90 transition cursor-pointer"
         >
           {loading ? "Sending..." : "Reset Password"}
         </button>
