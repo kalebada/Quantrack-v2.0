@@ -19,7 +19,7 @@ const Login = () => {
     try {
       //  Login -> get JWT token
       const res = await api.post("/token/", {
-        username: email,   // backend requires "username"
+        email: email,  
         password: password,
       });
 
@@ -43,10 +43,12 @@ const Login = () => {
       //  Validate role with selected tab
       if (isMember && role === "admin") {
         alert("This account is Admin. Switch to Team Admin tab.");
+        setLoading(false);
         return;
       }
       if (!isMember && role !== "admin") {
         alert("This account is Member. Switch to Member tab.");
+        setLoading(false);
         return;
       }
 
