@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { House } from "lucide-react";
-import { Link } from 'react-router-dom';
+import { Link , useNavigate } from 'react-router-dom';
 import { useForm } from "react-hook-form";
 import axios from "../api/axios"; 
 import logo from "../assets/logo.webp";
@@ -9,6 +9,7 @@ import google from "../assets/googlelogo.png";
 const SignUp = () => {
 
   const [isMember, setIsMember] = useState(true);
+  const navigate = useNavigate(); 
 
   const {
     register,
@@ -24,9 +25,6 @@ const SignUp = () => {
     try {
       let payload = {
         email: data.email,
-         username: isMember
-          ? `${data.firstName} ${data.lastName}`
-          : `${data.adminfirstname} ${data.adminlastname}`,
         password: data.password,
         confirm_password: data.password,
         role: isMember ? "volunteer" : "admin",
@@ -34,11 +32,15 @@ const SignUp = () => {
 
       if (isMember) {
         // volunteer payload
+        payload.first_name = data.firstName;
+        payload.last_name = data.lastName;
         payload.date_of_birth = data.dob;
         payload.school_or_organization = data.school;
         if (data.code) payload.join_code = data.code;
       } else {
         // admin + team creation payload
+        payload.first_name = data.adminfirstname;
+        payload.last_name = data.adminlastname;
         payload.organization_name = data.teamname;
         payload.date_of_establishment = data.date;
         payload.registration_number = data.registrationnumber;
@@ -54,9 +56,14 @@ const SignUp = () => {
         payload.job_title = data.position;
       }
 
-      const response = await axios.post("/register/", payload);
+      const endpoint = isMember
+        ? "/register/"
+        : "/register-organization/";
+
+      await axios.post(endpoint, payload);
 
       alert("Account created! Please verify your email.");
+      navigate("/verify-email");  
       reset();
     } catch (err) {
       console.log("SIGNUP ERROR:", err);
