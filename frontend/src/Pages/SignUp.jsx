@@ -56,11 +56,18 @@ const SignUp = () => {
         payload.job_title = data.position;
       }
 
-      const endpoint = isMember
-        ? "/register/"
-        : "/register-organization/";
+      const endpoint = "/register/";
 
-      await axios.post(endpoint, payload);
+      // Use a separate axios instance without credentials for registration
+      const registerAxios = axios.create({
+        baseURL: import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:8000/api",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        withCredentials: false, // Don't send cookies for registration
+      });
+
+      await registerAxios.post(endpoint, payload);
 
       alert("Account created! Please verify your email.");
       navigate("/verify-email");  

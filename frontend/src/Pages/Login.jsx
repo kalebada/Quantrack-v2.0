@@ -13,49 +13,44 @@ const Login = () => {
   const navigate = useNavigate();
 
   const handleLogin = async (e) => {
-  e.preventDefault();
-  setLoading(true);
+    e.preventDefault();
+    setLoading(true);
 
-  try {
-    // Login (sets HttpOnly cookies)
-    await api.post("/token/", {
-      email,
-      password,
-    });
-
-    // Try to fetch user (optional, not mandatory)
-    let role = null;
     try {
-      const me = await api.get("/authenticated/");
-      role = me.data?.role || null;
-    } catch {
-      role = null;
+      // Login (sets HttpOnly cookies)
+      const loginResponse = await api.post("/token/", {
+        email,
+        password,
+      });
+
+      // Fetch user data to get role
+      const userResponse = await api.get("/authenticated/");
+      const role = userResponse.data?.role;
+      console.log("User role:", role); // Debug log
+
+      // Route based on role
+      if (role === "admin") {
+        console.log("Navigating to admin page"); // Debug log
+        navigate("/admin"); // Assuming admin route exists
+      } else if (role === "volunteer") {
+        console.log("Navigating to volunteer page"); // Debug log
+        navigate("/volunteer");
+      } else {
+        // Fallback for unknown roles
+        console.log("Unknown role, navigating to volunteer page"); // Debug log
+        navigate("/volunteer");
+      }
+
+    } catch (err) {
+      alert(
+        err.response?.data?.message ||
+        err.response?.data?.detail ||
+        "Login failed. Please check credentials."
+      );
+    } finally {
+      setLoading(false);
     }
-
-    // If role exists, route properly
-    if (role === "admin") {
-      navigate("/admin");
-      return;
-    }
-
-    if (role === "volunteer") {
-      navigate("/volunteer");
-      return;
-    }
-
-    // Fallback (role missing but login succeeded)
-    navigate("/volunteer");
-
-  } catch (err) {
-    alert(
-      err.response?.data?.message ||
-      err.response?.data?.detail ||
-      "Login failed. Please check credentials."
-    );
-  } finally {
-    setLoading(false);
-  }
-};
+  };
 
   const handleGoogleLogin = () => {
     alert("Google login coming soon!");
@@ -91,7 +86,7 @@ const Login = () => {
           <button
             type="button"
             onClick={() => setIsMember(true)}
-            className={`w-full p-2 rounded ${
+            className={`w-full p-2 rounded cursor-pointer ${
               isMember ? "bg-[#9B4DFF]" : ""
             }`}
           >
@@ -100,7 +95,7 @@ const Login = () => {
           <button
             type="button"
             onClick={() => setIsMember(false)}
-            className={`w-full p-2 rounded ${
+            className={`w-full p-2 rounded cursor-pointer ${
               !isMember ? "bg-[#9B4DFF]" : ""
             }`}
           >
@@ -137,14 +132,14 @@ const Login = () => {
             Forgot Password?
           </Link>
           <Link to="/verify-email" className="text-[#9B4DFF]">
-            Verify Email
+            Verify Email?
           </Link>
         </div>
 
         <button
           type="submit"
           disabled={loading}
-          className="w-full py-3 bg-[#9B4DFF] text-white rounded flex justify-center items-center gap-2"
+          className="w-full py-3 bg-[#9B4DFF] text-white rounded flex justify-center items-center gap-2 cursor-pointer"
         >
           {loading ? "Logging in..." : "Log In"} <LogIn />
         </button>
@@ -154,7 +149,7 @@ const Login = () => {
 
       <button
         onClick={handleGoogleLogin}
-        className="bg-zinc-900 w-full md:w-[70%] lg:w-[32%] p-3 flex justify-center items-center text-white gap-2 rounded"
+        className="bg-zinc-900 w-full md:w-[70%] lg:w-[32%] p-3 flex justify-center items-center text-white gap-2 rounded cursor-pointer"
       >
         <img src={google} alt="" className="w-5" />
         Sign in with Google

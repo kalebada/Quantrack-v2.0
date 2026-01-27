@@ -14,8 +14,15 @@ const VerifyEmail = () => {
     e.preventDefault();
     setLoading(true);
 
+    const trimmedCode = code.trim();
+    if (trimmedCode.length !== 6) {
+      alert(`Please enter a valid 6-digit code. You entered: "${trimmedCode}" (length: ${trimmedCode.length})`);
+      setLoading(false);
+      return;
+    }
+
     try {
-      await api.post("/verify-email/", { code });
+      await api.post("/verify-email/", { code: trimmedCode });
       alert("Email verified successfully. You can now log in.");
       navigate("/login");
     } catch (err) {
@@ -31,7 +38,15 @@ const VerifyEmail = () => {
   const handleResend = async () => {
     setResending(true);
     try {
-      await api.post("/resend-verification-code/");
+      // Get email from localStorage or user input
+      const email = localStorage.getItem('user_email') || prompt('Please enter your email address:');
+      if (!email) {
+        alert('Email is required to resend verification code.');
+        setResending(false);
+        return;
+      }
+
+      await api.post("/resend-verification-email/", { email: email });
       alert("Verification code resent. Please check your email.");
     } catch (err) {
       alert(
@@ -105,7 +120,7 @@ const VerifyEmail = () => {
           type="button"
           onClick={handleResend}
           disabled={resending}
-          className="flex items-center justify-center gap-2 text-[#9B4DFF] text-sm font-semibold hover:underline"
+          className="flex items-center justify-center gap-2 text-[#9B4DFF] text-sm font-semibold cursor-pointer"
         >
           <RefreshCcw size={16} />
           {resending ? "Resending..." : "Resend code"}
