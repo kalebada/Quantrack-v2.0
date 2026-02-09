@@ -12,7 +12,7 @@ from datetime import  date
 from api.utils.permisions import IsVolunteer, IsAdmin, IsEmailVerified
 from django.core.mail import send_mail
 from django.conf import settings
-from api.utils.email_token import email_verification_token
+from api.utils.email_token import send_verification_email
 from django.utils.http import urlsafe_base64_encode
 from django.utils.encoding import force_bytes
 from django.utils.http import urlsafe_base64_decode
@@ -30,6 +30,8 @@ from io import BytesIO
 from datetime import datetime
 from api.utils.certificates import generate_volunteer_certificate, generate_summary_certificate
 from django.http import FileResponse
+from django.contrib.auth.hashers import check_password
+
 
 
 
@@ -718,49 +720,53 @@ def get_participations_as_admin(request, event_id):
     
 
 
-def send_verification_email(request, user):
-    uid = urlsafe_base64_encode(force_bytes(user.pk))
-    token = email_verification_token.make_token(user)
-    verify_url = f"{request.scheme}://{request.get_host()}/api/verify-email/{uid}/{token}/"
-
-    send_mail(
-        subject="Verify your email - QuanTrack",
-        message=f"Hi {user.username},\nPlease verify your email by clicking this link:\n{verify_url}",
-        from_email=settings.DEFAULT_FROM_EMAIL,
-        recipient_list=[user.email],
-        fail_silently=False,
-    )
 
 
-
-@api_view(['GET'])
+@api_view(['POST'])
 @permission_classes([AllowAny])
-def verify_email(request, uidb64, token):
+def verify_email_code(request):
+    email = request.data.get("email")
+    code = request.data.get("code")
+
+    if not email or not code:
+        return Response({"error": "Email and code are required"}, status=400)
+
     try:
-        uid = urlsafe_base64_decode(uidb64).decode()
-        user = User.objects.get(pk=uid)
-    except (TypeError, ValueError, OverflowError, User.DoesNotExist):
-        return Response({'error': 'Invalid verification link'}, status=400)
+        user = User.objects.get(email=email)
+    except User.DoesNotExist:
+        return Response({"error": "User not found"}, status=404)
 
     if user.is_active:
-        return Response({'message': 'Email already verified'}, status=200)
+        return Response({"message": "Email already verified"}, status=200)
 
-    if email_verification_token.check_token(user, token):
-        user.is_active = True
-        user.save()
-        return Response({'message': 'Email successfully verified!'}, status=200)
-    else:
-        return Response({'error': 'Invalid or expired token'}, status=400)
+    if not user.verification_code or not user.verification_code_expiry:
+        return Response({"error": "No verification code found"}, status=400)
+
+    if user.verification_code_expiry < timezone.now():
+        return Response({"error": "Verification code expired"}, status=400)
+
+    if not check_password(code, user.verification_code):
+        return Response({"error": "Invalid verification code"}, status=400)
+
+    user.is_active = True
+    user.verification_code = None
+    user.verification_code_expiry = None
+    user.save()
+
+    return Response({"message": "Email successfully verified!"}, status=200)
 
 
 
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
-def resend_verification_email(request):
-    if request.user.is_active:
+def resend_verification_code(request):
+    user = request.user
+
+    if user.is_active:
         return Response({'message': 'Email already verified'}, status=200)
-    send_verification_email(request, request.user)
-    return Response({'message': 'Verification email resent.'}, status=200)
+
+    send_verification_email(request, user)
+    return Response({'message': 'Verification code resent.'}, status=200)
 
 
 

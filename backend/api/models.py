@@ -15,6 +15,8 @@ class User(AbstractUser):
     role = models.CharField(max_length=20, choices=ROLE_CHOICES)
     email = models.EmailField(unique=True)
     is_active = models.BooleanField(default=False)
+    verification_code = models.CharField(max_length=128, null=True, blank=True)
+    verification_code_expiry = models.DateTimeField(null=True, blank=True)
     USERNAME_FIELD = 'email'
     REQUIRED_FIELDS = ['username']
 

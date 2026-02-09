@@ -156,10 +156,11 @@ class AdminSerializer(serializers.ModelSerializer):
     user = UserSerializer(read_only=True)
     profile_id = serializers.ReadOnlyField(source='id')  
     organization = serializers.PrimaryKeyRelatedField(queryset=Organization.objects.filter(admin__isnull=True))
+    name = serializers.CharField(source='organization.name', read_only=True)
 
     class Meta:
         model = Admin
-        fields = ['profile_id', 'user', 'organization', 'job_title', 'phone_number']
+        fields = ['profile_id', 'user', 'organization', 'name', 'job_title', 'phone_number']
 
 
 class OrganizationSerializer(serializers.ModelSerializer):
