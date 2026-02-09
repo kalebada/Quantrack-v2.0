@@ -149,3 +149,8 @@ MEDIA_ROOT = BASE_DIR / 'media'
 # DEFAULT PK
 # ======================
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+
+ACCESS_TOKEN_COOKIE_NAME = "access_token"
+ACCESS_TOKEN_COOKIE_SECURE = False
+ACCESS_TOKEN_COOKIE_SAMESITE = "Lax"

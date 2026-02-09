@@ -17,36 +17,54 @@ const Login = () => {
     setLoading(true);
 
     try {
-      // Login (sets HttpOnly cookies)
-      const loginResponse = await api.post("/token/", {
-        email,
-        password,
-      });
+      // ✅ SINGLE API CALL - Login gets tokens AND user info
+      const response = await api.post(
+        "/token/",
+        { email, password },
+        { withCredentials: true }
+      );
 
-      // Fetch user data to get role
-      const userResponse = await api.get("/authenticated/");
-      const role = userResponse.data?.role;
-      console.log("User role:", role); // Debug log
+      console.log("Login response:", response.data);
 
-      // Route based on role
-      if (role === "admin") {
-        console.log("Navigating to admin page"); // Debug log
-        navigate("/admin"); // Assuming admin route exists
-      } else if (role === "volunteer") {
-        console.log("Navigating to volunteer page"); // Debug log
-        navigate("/volunteer");
+      if (response.data.success) {
+        // ✅ Get role directly from login response
+        const userRole = response.data.user.role;
+        console.log("User role from login:", userRole);
+
+        // Route based on role
+        if (userRole === "admin") {
+          console.log("Navigating to admin page");
+          navigate("/admin");
+        } else if (userRole === "volunteer") {
+          console.log("Navigating to volunteer page");
+          navigate("/volunteer");
+        } else {
+          console.log("Unknown role, navigating to volunteer page");
+          navigate("/volunteer");
+        }
       } else {
-        // Fallback for unknown roles
-        console.log("Unknown role, navigating to volunteer page"); // Debug log
-        navigate("/volunteer");
+        // Handle unsuccessful login
+        alert(response.data.error || "Login failed");
       }
 
     } catch (err) {
-      alert(
-        err.response?.data?.message ||
-        err.response?.data?.detail ||
-        "Login failed. Please check credentials."
-      );
+      console.error("Login error details:", err);
+      
+      // More detailed error handling
+      if (err.response) {
+        // Server responded with error
+        const errorMessage = err.response.data?.error || 
+                            err.response.data?.detail || 
+                            err.response.data?.message ||
+                            `Login failed (${err.response.status})`;
+        alert(errorMessage);
+      } else if (err.request) {
+        // Request made but no response
+        alert("Network error. Please check your connection.");
+      } else {
+        // Something else went wrong
+        alert("An unexpected error occurred.");
+      }
     } finally {
       setLoading(false);
     }
@@ -86,8 +104,8 @@ const Login = () => {
           <button
             type="button"
             onClick={() => setIsMember(true)}
-            className={`w-full p-2 rounded cursor-pointer ${
-              isMember ? "bg-[#9B4DFF]" : ""
+            className={`w-full p-2 rounded cursor-pointer transition-colors ${
+              isMember ? "bg-[#9B4DFF]" : "hover:bg-zinc-800"
             }`}
           >
             Member
@@ -95,8 +113,8 @@ const Login = () => {
           <button
             type="button"
             onClick={() => setIsMember(false)}
-            className={`w-full p-2 rounded cursor-pointer ${
-              !isMember ? "bg-[#9B4DFF]" : ""
+            className={`w-full p-2 rounded cursor-pointer transition-colors ${
+              !isMember ? "bg-[#9B4DFF]" : "hover:bg-zinc-800"
             }`}
           >
             Team Admin
@@ -105,33 +123,35 @@ const Login = () => {
 
         {/* EMAIL */}
         <div>
-          <label className="text-white">Email</label>
+          <label className="text-white block mb-2">Email</label>
           <input
             type="email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            className="w-full p-3 rounded border border-[#9B4DFF] bg-transparent text-white"
+            className="w-full p-3 rounded border border-[#9B4DFF] bg-transparent text-white focus:outline-none focus:ring-2 focus:ring-[#9B4DFF]/50"
             required
+            placeholder="Enter your email"
           />
         </div>
 
         {/* PASSWORD */}
         <div>
-          <label className="text-white">Password</label>
+          <label className="text-white block mb-2">Password</label>
           <input
             type="password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            className="w-full p-3 rounded border border-[#9B4DFF] bg-transparent text-white"
+            className="w-full p-3 rounded border border-[#9B4DFF] bg-transparent text-white focus:outline-none focus:ring-2 focus:ring-[#9B4DFF]/50"
             required
+            placeholder="Enter your password"
           />
         </div>
 
         <div className="flex justify-between text-sm">
-          <Link to="/forgotpassword" className="text-[#9B4DFF]">
+          <Link to="/forgotpassword" className="text-[#9B4DFF] hover:text-[#8B3DFF] transition-colors">
             Forgot Password?
           </Link>
-          <Link to="/verify-email" className="text-[#9B4DFF]">
+          <Link to="/verify-email" className="text-[#9B4DFF] hover:text-[#8B3DFF] transition-colors">
             Verify Email?
           </Link>
         </div>
@@ -139,25 +159,43 @@ const Login = () => {
         <button
           type="submit"
           disabled={loading}
-          className="w-full py-3 bg-[#9B4DFF] text-white rounded flex justify-center items-center gap-2 cursor-pointer"
+          className={`w-full py-3 bg-[#9B4DFF] text-white rounded flex justify-center items-center gap-2 transition-all ${
+            loading ? "opacity-70 cursor-not-allowed" : "hover:bg-[#8B3DFF] active:scale-[0.98] cursor-pointer"
+          }`}
         >
-          {loading ? "Logging in..." : "Log In"} <LogIn />
+          {loading ? (
+            <>
+              <svg className="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+              </svg>
+              Logging in...
+            </>
+          ) : (
+            <>
+              Log In <LogIn size={20} />
+            </>
+          )}
         </button>
       </form>
 
-      <p className="text-white my-4 text-sm">Or continue with</p>
+      <div className="my-6 flex items-center w-full md:w-[70%] lg:w-[32%]">
+        <div className="flex-1 h-px bg-gray-700"></div>
+        <span className="px-4 text-gray-400 text-sm">Or continue with</span>
+        <div className="flex-1 h-px bg-gray-700"></div>
+      </div>
 
       <button
         onClick={handleGoogleLogin}
-        className="bg-zinc-900 w-full md:w-[70%] lg:w-[32%] p-3 flex justify-center items-center text-white gap-2 rounded cursor-pointer"
+        className="bg-zinc-900 w-full md:w-[70%] lg:w-[32%] p-3 flex justify-center items-center text-white gap-2 rounded hover:bg-zinc-800 transition-colors active:scale-[0.98] cursor-pointer"
       >
-        <img src={google} alt="" className="w-5" />
+        <img src={google} alt="Google" className="w-5 h-5" />
         Sign in with Google
       </button>
 
-      <p className="text-gray-400 text-sm mt-4">
-        Don’t have an account?{" "}
-        <Link to="/signup" className="text-[#9B4DFF]">
+      <p className="text-gray-400 text-sm mt-6">
+        Don't have an account?{" "}
+        <Link to="/signup" className="text-[#9B4DFF] font-medium hover:text-[#8B3DFF] transition-colors">
           Sign Up
         </Link>
       </p>

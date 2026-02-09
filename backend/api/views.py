@@ -43,25 +43,25 @@ User = get_user_model()
 
 class CustomTokenObtainPairView(TokenObtainPairView):
     """Custom login view that sets access and refresh tokens as HttpOnly cookies."""
+    
     def post(self, request, *args, **kwargs):
         try:
             # Authenticate and obtain JWT tokens
             response = super().post(request, *args, **kwargs)
             tokens = response.data
-
             access_token = tokens.get('access')
             refresh_token = tokens.get('refresh')
             email = request.data.get('email')
-
+            
             if not email:
                 return Response({'error': 'Email field is required.'}, status=400)
-
+            
             try:
                 user = User.objects.get(email=email)
             except User.DoesNotExist:
                 return Response({'error': 'User not found'}, status=404)
-
-            # Return user info + set secure cookies
+            
+            # ✅ Return user info WITH tokens AND set cookies in one response
             res = Response({
                 'success': True,
                 'message': 'Login successful',
@@ -70,29 +70,34 @@ class CustomTokenObtainPairView(TokenObtainPairView):
                     'email': user.email,
                     'username': user.username,
                     'role': user.role,
+                },
+                'tokens': {  # ✅ Also return tokens in response for debugging
+                    'access': access_token,
+                    'refresh': refresh_token
                 }
             }, status=status.HTTP_200_OK)
-
+            
             # Set tokens in cookies
             res.set_cookie(
                 key='access_token',
                 value=access_token,
                 httponly=True,
-                secure=True,
-                samesite='None',
+                secure=False,  # Set to True in production with HTTPS
+                samesite='Lax',
                 path='/',
+                max_age=60 * 60 * 24,  # 1 day
             )
             res.set_cookie(
                 key='refresh_token',
                 value=refresh_token,
                 httponly=True,
-                secure=True,
-                samesite='None',
+                secure=False,
+                samesite='Lax',
                 path='/',
+                max_age=60 * 60 * 24 * 7,  # 7 days
             )
-
+            
             return res
-
         except Exception as e:
             return Response({'success': False, 'error': str(e)}, status=400)
 
