@@ -1,30 +1,21 @@
+// api/axios.js
 import axios from "axios";
 
 const axiosInstance = axios.create({
-  baseURL: import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:8000/api",
+  baseURL: "http://localhost:8000/api",  // Must match EXACTLY
   headers: {
     "Content-Type": "application/json",
   },
-  withCredentials: true, // REQUIRED for HTTP-only cookie auth
+  withCredentials: true,  // CRITICAL for cookies
 });
 
-
+// Add a small delay to help Safari
 axiosInstance.interceptors.request.use(
   (config) => {
+    console.log(`🚀 Request: ${config.method.toUpperCase()} ${config.url}`);
     return config;
   },
   (error) => Promise.reject(error)
-);
-
-
-axiosInstance.interceptors.response.use(
-  (response) => response,
-  (error) => {
-    if (error.response?.status === 401) {
-      console.warn("Unauthorized request (401)");
-    }
-    return Promise.reject(error);
-  }
 );
 
 export default axiosInstance;

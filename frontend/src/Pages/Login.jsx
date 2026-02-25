@@ -12,26 +12,25 @@ const Login = () => {
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
 
-  const handleLogin = async (e) => {
-    e.preventDefault();
-    setLoading(true);
+ const handleLogin = async (e) => {
+  e.preventDefault();
+  setLoading(true);
 
-    try {
-      // ✅ SINGLE API CALL - Login gets tokens AND user info
-      const response = await api.post(
-        "/token/",
-        { email, password },
-        { withCredentials: true }
-      );
+  try {
+    const response = await api.post(
+      "/token/",
+      { email, password },
+      { withCredentials: true }
+    );
 
-      console.log("Login response:", response.data);
+    console.log("Login response:", response.data);
 
-      if (response.data.success) {
-        // ✅ Get role directly from login response
-        const userRole = response.data.user.role;
-        console.log("User role from login:", userRole);
-
-        // Route based on role
+    if (response.data.success) {
+      const userRole = response.data.user.role;
+      
+      // IMPORTANT: Wait for cookies to be set
+      // Small delay to ensure cookies are stored
+      setTimeout(() => {
         if (userRole === "admin") {
           console.log("Navigating to admin page");
           navigate("/admin");
@@ -39,36 +38,18 @@ const Login = () => {
           console.log("Navigating to volunteer page");
           navigate("/volunteer");
         } else {
-          console.log("Unknown role, navigating to volunteer page");
           navigate("/volunteer");
         }
-      } else {
-        // Handle unsuccessful login
-        alert(response.data.error || "Login failed");
-      }
-
-    } catch (err) {
-      console.error("Login error details:", err);
-      
-      // More detailed error handling
-      if (err.response) {
-        // Server responded with error
-        const errorMessage = err.response.data?.error || 
-                            err.response.data?.detail || 
-                            err.response.data?.message ||
-                            `Login failed (${err.response.status})`;
-        alert(errorMessage);
-      } else if (err.request) {
-        // Request made but no response
-        alert("Network error. Please check your connection.");
-      } else {
-        // Something else went wrong
-        alert("An unexpected error occurred.");
-      }
-    } finally {
-      setLoading(false);
+      }, 500); // 500ms delay
     }
-  };
+
+  } catch (err) {
+    console.error("Login error:", err);
+    alert("Login failed. Check console.");
+  } finally {
+    setLoading(false);
+  }
+};
 
   const handleGoogleLogin = () => {
     alert("Google login coming soon!");
