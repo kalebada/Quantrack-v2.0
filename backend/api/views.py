@@ -6,6 +6,15 @@ from .models import Volunteer, Admin, User, Organization, Event, Participation, 
 from .serializers import VolunteerSerializer, AdminSerializer, OrganizationSerializer, EventSerializer, ParticipationSerializer, PasswordResetConfirmSerializer, PasswordResetRequestSerializer
 from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 from rest_framework import status
+from rest_framework_simplejwt.exceptions import InvalidToken, TokenError
+from rest_framework_simplejwt.tokens import RefreshToken
+from django.contrib.auth import authenticate
+from django.contrib.auth.tokens import PasswordResetTokenGenerator
+from django.utils.encoding import force_str, smart_bytes, DjangoUnicodeDecodeError
+from django.utils.http import urlsafe_base64_encode, urlsafe_base64_decode
+from django.core.mail import send_mail
+from django.conf import settings
+from django.shortcuts import get_object_or_404
 from uuid import UUID, uuid4
 from django.utils import timezone
 from datetime import  date
@@ -21,7 +30,7 @@ from django.db.models import Count, Sum, Q, Avg
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
-from django.http import HttpResponse
+from django.http import HttpResponse, JsonResponse
 from reportlab.pdfgen import canvas
 from reportlab.lib.pagesizes import A4
 from reportlab.lib import colors
@@ -31,62 +40,54 @@ from datetime import datetime
 from api.utils.certificates import generate_volunteer_certificate, generate_summary_certificate
 from django.http import FileResponse
 from django.contrib.auth.hashers import check_password
+import logging
+
 
 
 
 
 User = get_user_model()
 
-
+logger = logging.getLogger(__name__)
 
 # 🔐 --- Authentication Views (JWT) ---
 
+
 class CustomTokenObtainPairView(TokenObtainPairView):
-    """Custom login view that sets access and refresh tokens as HttpOnly cookies."""
-    
     def post(self, request, *args, **kwargs):
         try:
-            # Authenticate and obtain JWT tokens
             response = super().post(request, *args, **kwargs)
             tokens = response.data
             access_token = tokens.get('access')
             refresh_token = tokens.get('refresh')
+            
             email = request.data.get('email')
+            user = User.objects.get(email=email)
             
-            if not email:
-                return Response({'error': 'Email field is required.'}, status=400)
-            
-            try:
-                user = User.objects.get(email=email)
-            except User.DoesNotExist:
-                return Response({'error': 'User not found'}, status=404)
-            
-            # ✅ Return user info WITH tokens AND set cookies in one response
-            res = Response({
+            res = JsonResponse({
                 'success': True,
                 'message': 'Login successful',
                 'user': {
-                    'id': user.id,
+                    'id': str(user.id),
                     'email': user.email,
                     'username': user.username,
                     'role': user.role,
-                },
-                'tokens': {  # ✅ Also return tokens in response for debugging
-                    'access': access_token,
-                    'refresh': refresh_token
                 }
-            }, status=status.HTTP_200_OK)
+            })
             
-            # Set tokens in cookies
+            # CRITICAL: For Safari on localhost, use domain=None
+            # and ensure all parameters are explicit
             res.set_cookie(
                 key='access_token',
                 value=access_token,
                 httponly=True,
-                secure=False,  # Set to True in production with HTTPS
-                samesite='Lax',
+                secure=False,           # Must be False for localhost
+                samesite='Lax',          # Safari needs Lax
                 path='/',
-                max_age=60 * 60 * 24,  # 1 day
+                domain=None,             # Let browser handle domain
+                max_age=3600,
             )
+            
             res.set_cookie(
                 key='refresh_token',
                 value=refresh_token,
@@ -94,39 +95,122 @@ class CustomTokenObtainPairView(TokenObtainPairView):
                 secure=False,
                 samesite='Lax',
                 path='/',
-                max_age=60 * 60 * 24 * 7,  # 7 days
+                domain=None,
+                max_age=604800,
             )
             
+            # Add a non-HttpOnly test cookie to verify
+            res.set_cookie(
+                key='safari_test',
+                value='working',
+                httponly=False,
+                secure=False,
+                samesite='Lax',
+                path='/',
+                domain=None,
+                max_age=3600,
+            )
+            
+            print("=== SAFARI COOKIES SET ===")
+            print(f"Frontend: http://localhost:5173")
+            print(f"Cookies: {list(res.cookies.keys())}")
+            print("==========================")
+            
             return res
+            
         except Exception as e:
-            return Response({'success': False, 'error': str(e)}, status=400)
-
-
+            print(f"Error: {e}")
+            return JsonResponse({'error': str(e)}, status=400)
+        
 class CustomTokenRefreshView(TokenRefreshView):
     """Refresh JWT tokens using HttpOnly refresh cookie."""
+    
     def post(self, request, *args, **kwargs):
         try:
-            refresh_token = request.COOKIES.get('refresh_token')
+            # Get refresh token from HttpOnly cookie
+            refresh_token = request.COOKIES.get(settings.REFRESH_TOKEN_COOKIE_NAME)
+            
             if not refresh_token:
-                return Response({'success': False, 'error': 'No refresh token found'}, status=400)
-
+                logger.warning("Refresh token not found in cookies")
+                return Response(
+                    {'success': False, 'error': 'No refresh token found. Please login again.'}, 
+                    status=status.HTTP_401_UNAUTHORIZED
+                )
+            
+            # Add refresh token to request data
             request.data['refresh'] = refresh_token
+            
+            # Get new access token
             response = super().post(request, *args, **kwargs)
             tokens = response.data
+            
+            if 'access' not in tokens:
+                return Response(
+                    {'success': False, 'error': 'Failed to refresh token'}, 
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
             access_token = tokens.get('access')
-
-            res = Response({'success': True}, status=200)
+            
+            # Create response
+            res = Response({
+                'success': True,
+                'message': 'Token refreshed successfully'
+                # No tokens in response body
+            }, status=status.HTTP_200_OK)
+            
+            # Set new access token in HttpOnly cookie
             res.set_cookie(
-                key='access_token',
+                key=settings.ACCESS_TOKEN_COOKIE_NAME,
                 value=access_token,
                 httponly=True,
-                secure=True,
-                samesite='None',
+                secure=not settings.DEBUG,  # True in production, False in development
+                samesite=settings.ACCESS_TOKEN_COOKIE_SAMESITE,
                 path='/',
+                max_age=60 * 60,  # 1 hour
+                domain=None,
             )
+            
+            # Also refresh the refresh token cookie (optional but recommended)
+            res.set_cookie(
+                key=settings.REFRESH_TOKEN_COOKIE_NAME,
+                value=refresh_token,
+                httponly=True,
+                secure=not settings.DEBUG,
+                samesite=settings.REFRESH_TOKEN_COOKIE_SAMESITE,
+                path='/',
+                max_age=60 * 60 * 24 * 7,  # 7 days
+                domain=None,
+            )
+            
+            logger.info("Token refreshed successfully")
             return res
+            
+        except InvalidToken as e:
+            logger.error(f"Invalid refresh token: {str(e)}")
+            # Clear invalid cookies
+            res = Response(
+                {'success': False, 'error': 'Invalid refresh token. Please login again.'}, 
+                status=status.HTTP_401_UNAUTHORIZED
+            )
+            res.delete_cookie(settings.ACCESS_TOKEN_COOKIE_NAME, path='/', domain=None)
+            res.delete_cookie(settings.REFRESH_TOKEN_COOKIE_NAME, path='/', domain=None)
+            return res
+            
+        except TokenError as e:
+            logger.error(f"Token error during refresh: {str(e)}")
+            return Response(
+                {'success': False, 'error': 'Token expired. Please login again.'}, 
+                status=status.HTTP_401_UNAUTHORIZED
+            )
         except Exception as e:
-            return Response({'success': False, 'error': str(e)}, status=400)
+            logger.error(f"Token refresh error: {str(e)}")
+            return Response(
+                {'success': False, 'error': 'Failed to refresh token'}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+
 
 
 # 👤 --- User Profile Views ---

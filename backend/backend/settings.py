@@ -12,7 +12,8 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # ======================
 SECRET_KEY = 'django-insecure-dev-key-change-later'
 DEBUG = True
-ALLOWED_HOSTS = []
+
+ALLOWED_HOSTS = ["localhost", "127.0.0.1"]
 
 
 # ======================
@@ -42,7 +43,10 @@ MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
+
+    # CSRF still enabled (important)
     'django.middleware.csrf.CsrfViewMiddleware',
+
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
@@ -50,10 +54,18 @@ MIDDLEWARE = [
 
 
 # ======================
-# CORS
+# CORS & CSRF
 # ======================
-CORS_ALLOW_ALL_ORIGINS = True
+CORS_ALLOW_ALL_ORIGINS = False
 CORS_ALLOW_CREDENTIALS = True
+
+CORS_ALLOWED_ORIGINS = [
+    "http://localhost:5173",
+]
+
+CSRF_TRUSTED_ORIGINS = [
+    "http://localhost:5173",
+]
 
 
 # ======================
@@ -122,6 +134,18 @@ REST_FRAMEWORK = {
 
 
 # ======================
+# SIMPLE JWT
+# ======================
+from datetime import timedelta
+
+SIMPLE_JWT = {
+    "ACCESS_TOKEN_LIFETIME": timedelta(minutes=60),
+    "REFRESH_TOKEN_LIFETIME": timedelta(days=7),
+    "AUTH_HEADER_TYPES": ("Bearer",),
+}
+
+
+# ======================
 # EMAIL (DEV ONLY)
 # ======================
 EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
@@ -151,6 +175,16 @@ MEDIA_ROOT = BASE_DIR / 'media'
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 
+# ======================
+# COOKIE SETTINGS
+# ======================
 ACCESS_TOKEN_COOKIE_NAME = "access_token"
+REFRESH_TOKEN_COOKIE_NAME = "refresh_token"
+
 ACCESS_TOKEN_COOKIE_SECURE = False
+REFRESH_TOKEN_COOKIE_SECURE = False
+
 ACCESS_TOKEN_COOKIE_SAMESITE = "Lax"
+REFRESH_TOKEN_COOKIE_SAMESITE = "Lax"
+
+CORS_EXPOSE_HEADERS = ['Set-Cookie']
