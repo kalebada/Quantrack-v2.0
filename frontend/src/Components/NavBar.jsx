@@ -5,6 +5,8 @@ import api from '../api/axios';
 
 const NavBar = () => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [isVolunteer, setIsVolunteer] = useState(false);
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -13,6 +15,16 @@ const NavBar = () => {
       try {
         await api.get('/authenticated/');
         setIsAuthenticated(true);
+
+        // Check roles
+        try {
+          await api.get('/my-admin-data/');
+          setIsAdmin(true);
+        } catch {}
+        try {
+          await api.get('/my-volunteer-data/');
+          setIsVolunteer(true);
+        } catch {}
       } catch (error) {
         setIsAuthenticated(false);
       }
@@ -24,6 +36,8 @@ const NavBar = () => {
     try {
       await api.post('/logout/');
       setIsAuthenticated(false);
+      setIsAdmin(false);
+      setIsVolunteer(false);
       navigate('/');
     } catch (error) {
       console.error('Logout failed:', error);
@@ -38,12 +52,27 @@ const NavBar = () => {
         </a>
         <div className='flex items-center gap-4 font-[montserrat] text-sm text-white'>
           {isAuthenticated ? (
-            <button
-              onClick={handleLogout}
-              className='px-4 py-1 border border-[#9B4DFF] rounded cursor-pointer lg:hover:bg-[#9B4DFF] transition-all duration-200'
-            >
-              Logout
-            </button>
+            <div className='flex gap-2'>
+              {isAdmin && (
+                <>
+                  <Link to='/analytics' className='px-3 py-1 border border-[#9B4DFF] rounded cursor-pointer lg:hover:bg-[#9B4DFF] transition-all duration-200'>Analytics</Link>
+                  <Link to='/create-event' className='px-3 py-1 border border-[#9B4DFF] rounded cursor-pointer lg:hover:bg-[#9B4DFF] transition-all duration-200'>Create Event</Link>
+                </>
+              )}
+              {isVolunteer && (
+                <>
+                  <Link to='/qr-scanner' className='px-3 py-1 border border-[#9B4DFF] rounded cursor-pointer lg:hover:bg-[#9B4DFF] transition-all duration-200'>QR Scanner</Link>
+                  <Link to='/summary-certificate' className='px-3 py-1 border border-[#9B4DFF] rounded cursor-pointer lg:hover:bg-[#9B4DFF] transition-all duration-200'>Certificates</Link>
+                </>
+              )}
+              <Link to='/volunteer' className='px-3 py-1 border border-[#9B4DFF] rounded cursor-pointer lg:hover:bg-[#9B4DFF] transition-all duration-200'>Dashboard</Link>
+              <button
+                onClick={handleLogout}
+                className='px-4 py-1 border border-[#9B4DFF] rounded cursor-pointer lg:hover:bg-[#9B4DFF] transition-all duration-200'
+              >
+                Logout
+              </button>
+            </div>
           ) : (
             <>
               <Link to='/verify-email' className='px-4 py-1 border border-[#9B4DFF] rounded cursor-pointer lg:hover:bg-[#9B4DFF] transition-all duration-200'>Verify</Link>

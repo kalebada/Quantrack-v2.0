@@ -60,17 +60,7 @@ const Admin = () => {
     }
   };
 
-  const handleCreateEvent = async (eventData) => {
-    try {
-      await api.post("/create-event/", eventData);
-      alert("Event created successfully!");
-      // Refresh events
-      const eventsRes = await api.get("/get-my-events-as-admin/");
-      setEvents(eventsRes.data.events || []);
-    } catch (err) {
-      alert("Failed to create event");
-    }
-  };
+
 
   if (loading) {
     return (
@@ -152,8 +142,8 @@ const Admin = () => {
                             <div className='flex justify-between items-center'>
                                 <h2 className='text-xl font-semibold'>Organization Events</h2>
                                 <button
-                                    onClick={() => alert("Create Event functionality coming soon!")}
-                                    className='bg-[#9B4DFF] px-4 py-2 rounded flex items-center gap-2 cursor-pointer'
+                                    onClick={() => navigate('/create-event')}
+                                    className='bg-[#9B4DFF] px-4 py-2 rounded flex items-center gap-2 cursor-pointer hover:bg-[#8B3DFF] transition-colors'
                                 >
                                     <Plus size={20} /> Create Event
                                 </button>

@@ -10,6 +10,7 @@ const Volunteer = () => {
   const [loading, setLoading] = useState(true);
   const [events, setEvents] = useState([]);
   const [participations, setParticipations] = useState([]);
+  const [userData, setUserData] = useState({});
   const [stats, setStats] = useState({});
   const [activeTab, setActiveTab] = useState('tasks');
 
@@ -86,8 +87,8 @@ const Volunteer = () => {
                     <h2 className='text-gray-400 font-[montserrat] w-[90%] md:text-xl lg:text-base'>Track your engagement and multiply your impact</h2>
                 </div>
                 <div className='w-full flex justify-start lg:justify-end items-center gap-2 lg:gap-4 text-white md:text-xl lg:text-base'>
-                    <button className=' bg-[#9B4DFF] px-4 py-2 rounded font-[montserrat] flex justify-center items-center gap-2 cursor-pointer' onClick={() => alert("QR Code feature coming soon!")}>
-                        <QrCode size={22} />Code
+                    <button className=' bg-[#9B4DFF] px-4 py-2 rounded font-[montserrat] flex justify-center items-center gap-2 cursor-pointer hover:bg-[#8B3DFF] transition-colors' onClick={() => navigate('/qr-scanner')}>
+                        <QrCode size={22} />QR Code
                     </button>
                     <button className=' bg-[#9B4DFF] px-4 py-2 rounded font-[montserrat] flex justify-center items-center gap-2 cursor-pointer' onClick={() => navigate('/join-organization')}><Plus size={22}  />Join Organization</button>
                 </div>
@@ -95,23 +96,85 @@ const Volunteer = () => {
             <div className='w-full flex flex-col justify-start items-start text-white gap-4'>
                 <h1 className='font-[montserrat] text-xl md:text-2xl lg:text-2xl'>Track Activities</h1>
                 <div className='w-full lg:w-[80%] flex flex-col md:flex-row lg:flex-row justify-center items-start gap-4 lg:gap-8'>
-                    <div className='w-full flex flex-col justify-center items-start gap-2 mb-4'>
-                    <h1 className='font-[montserrat] text-lg md:text-xl lg:text-lg font-semibold'>My Tasks</h1>
-                    <div className='min-h-[40vh] w-full bg-zinc-900 rounded-lg flex flex-col justify-center items-center p-2 relative'>
-                        <p className='flex font-[montserrat] items-center gap-2 absolute top-4 right-4 md:text-lg lg:text-base'><ClockAlert /> 0 Pending</p>
-                        <p className='font-[montserrat] flex flex-col justify-center items-center gap-2 md:text-xl lg:text-base'>
-                            <span><CircleCheck size={60} /></span>
-                            <span>No Pending Tasks</span>
-                        </p>
+                <div className='w-full flex flex-col justify-center items-start gap-2 mb-4'>
+                    <h1 className='font-[montserrat] text-lg md:text-xl lg:text-lg font-semibold'>My Participations ({participations.filter(p => p.status === 'pending').length} Pending)</h1>
+                    <div className='min-h-[40vh] w-full bg-zinc-900 rounded-lg p-4 overflow-y-auto'>
+                      {participations.length === 0 ? (
+                        <div className='flex flex-col justify-center items-center h-full gap-4 text-center'>
+                          <CircleCheck className='text-green-500 h-16 w-16' />
+                          <p className='text-xl text-gray-400'>No participations yet</p>
+                          <p className='text-gray-500'>Join events to get started</p>
+                        </div>
+                      ) : (
+                        <div className='space-y-3'>
+                          {participations.slice(0, 5).map((participation) => (
+                            <div key={participation.id} className='bg-zinc-800 p-4 rounded-lg border-l-4' style={{ borderLeftColor: participation.status === 'completed' ? '#10b981' : '#f59e0b' }}>
+                              <div className='flex justify-between items-start mb-2'>
+                                <h3 className='font-semibold text-white'>{participation.event_name}</h3>
+                                <span className={`px-2 py-1 rounded text-xs font-medium ${
+                                  participation.status === 'completed' 
+                                    ? 'bg-green-600 text-white' 
+                                    : 'bg-yellow-600 text-white'
+                                }`}>
+                                  {participation.status}
+                                </span>
+                              </div>
+                              <p className='text-gray-400 text-sm'>{participation.event_description}</p>
+                              {participation.status === 'completed' && (
+                                <button
+                                  onClick={() => handleDownloadCertificate(participation.id)}
+                                  className='mt-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-1 rounded text-sm transition-colors'
+                                >
+                                  Download Certificate
+                                </button>
+                              )}
+                            </div>
+                          ))}
+                          {participations.length > 5 && (
+                            <p className='text-gray-400 text-center'>Showing 5 of {participations.length}</p>
+                          )}
+                        </div>
+                      )}
                     </div>
                 </div>
                 <div className='w-full flex flex-col justify-center items-start gap-2'>
                     <h1 className='font-[montserrat] text-lg md:text-xl lg:text-lg font-semibold'>My Organization</h1>
-                    <div className='min-h-[40vh] w-full bg-zinc-900 rounded-lg flex flex-col justify-center items-center p-4'>
-                        <p className='font-[montserrat] flex flex-col justify-center items-center gap-2 md:text-xl lg:text-base'>
-                            <span><Plus size={60} /></span>
-                            <span>Join New Organization</span>
-                        </p>
+                    <div className='min-h-[40vh] w-full bg-zinc-900 rounded-lg p-4'>
+                      {userData?.organization ? (
+                        <div className='space-y-4'>
+                          <div className='text-center'>
+                            <h3 className='text-2xl font-bold text-[#9B4DFF]'>{userData.organization.name}</h3>
+                            <p className='text-gray-400'>Join Code: <code className='bg-black px-2 py-1 rounded text-sm'>{userData.organization.join_code}</code></p>
+                          </div>
+                          <div className='grid grid-cols-2 gap-4 text-center'>
+                            <div className='bg-zinc-800 p-4 rounded-lg'>
+                              <p className='text-2xl font-bold text-white'>{stats.total_events_joined || 0}</p>
+                              <p className='text-gray-400'>Events Joined</p>
+                            </div>
+                            <div className='bg-zinc-800 p-4 rounded-lg'>
+                              <p className='text-2xl font-bold text-green-400'>{stats.total_service_hours || 0}h</p>
+                              <p className='text-gray-400'>Service Hours</p>
+                            </div>
+                          </div>
+                          <button
+                            onClick={() => navigate('/quit-organization')}
+                            className='w-full bg-red-600 hover:bg-red-700 text-white py-2 px-4 rounded-lg font-semibold transition-colors'
+                          >
+                            Leave Organization
+                          </button>
+                        </div>
+                      ) : (
+                        <div className='flex flex-col justify-center items-center h-full gap-4'>
+                          <Plus className='text-gray-500 h-16 w-16' />
+                          <p className='text-xl text-gray-400'>No Organization</p>
+                          <button
+                            onClick={() => navigate('/join-organization')}
+                            className='bg-[#9B4DFF] hover:bg-[#8B3DFF] text-white px-8 py-3 rounded-lg font-semibold transition-colors'
+                          >
+                            Join Organization
+                          </button>
+                        </div>
+                      )}
                     </div>
                 </div>
                 </div>
