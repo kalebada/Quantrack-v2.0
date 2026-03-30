@@ -9,6 +9,7 @@ const UpdateOrganization = () => {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [formData, setFormData] = useState({
+    id: '',
     name: '',
     date_of_establishment: '',
     registration_number: '',
@@ -27,6 +28,7 @@ const UpdateOrganization = () => {
         const org = response.data.organization;
         if (org) {
           setFormData({
+            id: org.id || '',
             name: org.name || '',
             date_of_establishment: org.date_of_establishment || '',
             registration_number: org.registration_number || '',
@@ -65,8 +67,11 @@ const UpdateOrganization = () => {
       alert("Organization updated successfully!");
       navigate('/admin');
     } catch (err) {
-      console.error("Failed to update organization:", err);
-      alert("Failed to update organization. Please try again.");
+      console.error("Failed to update organization:", err.response?.data);
+      const errorMsg = err.response?.data?.errors 
+        ? Object.entries(err.response.data.errors).map(([k, v]) => `${k}: ${v}`).join('\n')
+        : (err.response?.data?.error || 'Failed to update organization. Please try again.');
+      alert(errorMsg);
     } finally {
       setSaving(false);
     }
@@ -83,7 +88,7 @@ const UpdateOrganization = () => {
   return (
     <div className='h-auto w-full'>
       <NavBar />
-      <div className='min-h-screen w-full bg-zinc-950 flex flex-col justify-start items-start gap-8 md:gap-16 lg:gap-12 px-4 py-4'>
+      <div className='min-h-screen w-full bg-zinc-950 flex flex-col justify-start items-center gap-8 md:gap-16 lg:gap-12 px-4 py-4'>
         <div className='w-full flex flex-col justify-center items-center gap-4'>
           <button
             onClick={() => navigate('/admin')}

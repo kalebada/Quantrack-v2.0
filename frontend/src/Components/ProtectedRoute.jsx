@@ -15,19 +15,26 @@ const ProtectedRoute = ({ children, adminOnly = false, volunteerOnly = false }) 
         await api.get('/authenticated/');
         setIsAuthenticated(true);
 
-        // Check roles
-        try {
-          await api.get('/my-admin-data/');
+        // Check roles from localStorage first to avoid 403 console errors
+        const storedRole = localStorage.getItem('userRole');
+        if (storedRole === 'admin') {
           setIsAdmin(true);
-        } catch (adminErr) {
-          // Not admin
-        }
-
-        try {
-          await api.get('/my-volunteer-data/');
+        } else if (storedRole === 'volunteer') {
           setIsVolunteer(true);
-        } catch (volErr) {
-          // Not volunteer
+        } else {
+          try {
+            await api.get('/my-volunteer-data/');
+            setIsVolunteer(true);
+            localStorage.setItem('userRole', 'volunteer');
+          } catch (volErr) {
+            try {
+              await api.get('/my-admin-data/');
+              setIsAdmin(true);
+              localStorage.setItem('userRole', 'admin');
+            } catch (adminErr) {
+              // Not admin
+            }
+          }
         }
       } catch (err) {
         setIsAuthenticated(false);
@@ -61,7 +68,6 @@ const ProtectedRoute = ({ children, adminOnly = false, volunteerOnly = false }) 
 
   return (
     <>
-      <NavBar />
       {children}
     </>
   );

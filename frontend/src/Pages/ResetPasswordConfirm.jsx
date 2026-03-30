@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import api from "../api/axios";
+import axios from "axios";
 import { Lock, ArrowLeft, Eye, EyeOff } from 'lucide-react';
 
 const ResetPasswordConfirm = () => {
@@ -67,10 +67,17 @@ const ResetPasswordConfirm = () => {
     setLoading(true);
 
     try {
-      await api.post('/password-reset-confirm/', {
+      const publicAxios = axios.create({
+        baseURL: import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:8000/api",
+        headers: { "Content-Type": "application/json" },
+        withCredentials: false,
+      });
+
+      await publicAxios.post('/password-reset-confirm/', {
         uidb64,
         token,
-        password: formData.password
+        new_password: formData.password,
+        confirm_password: formData.confirmPassword
       });
 
       alert('Password reset successfully! You can now log in with your new password.');

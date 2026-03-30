@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { House, Mail } from "lucide-react";
-import api from "../api/axios";
+import axios from "axios";
 import logo from "../assets/logo.webp";
 
 const ForgotPassword = () => {
@@ -13,7 +13,12 @@ const ForgotPassword = () => {
     setLoading(true);
 
     try {
-      await api.post("/password-reset/", { email });
+      const publicAxios = axios.create({
+        baseURL: import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:8000/api",
+        headers: { "Content-Type": "application/json" },
+        withCredentials: false,
+      });
+      await publicAxios.post("/password-reset/", { email });
       alert("Password reset link sent to your email.");
       setEmail("");
     } catch (err) {

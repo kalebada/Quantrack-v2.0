@@ -69,20 +69,20 @@ const SummaryCertificate = () => {
         <div className='grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6'>
           <div className='bg-zinc-900 p-8 rounded-2xl text-center border border-zinc-700 hover:border-[#9B4DFF] transition-all group'>
             <Users className='mx-auto h-16 w-16 text-[#9B4DFF] mb-4 group-hover:scale-110 transition-transform' />
-            <h3 className='text-2xl font-bold text-white mb-2'>{stats.total_events || 0}</h3>
+            <h3 className='text-2xl font-bold text-white mb-2'>{stats.total_events_joined || 0}</h3>
             <p className='text-gray-400 text-lg'>Events Participated</p>
           </div>
 
           <div className='bg-zinc-900 p-8 rounded-2xl text-center border border-zinc-700 hover:border-[#9B4DFF] transition-all group'>
             <Clock className='mx-auto h-16 w-16 text-green-400 mb-4 group-hover:scale-110 transition-transform' />
-            <h3 className='text-2xl font-bold text-white mb-2'>{stats.total_service_hours || 0}h</h3>
+            <h3 className='text-2xl font-bold text-white mb-2'>{stats.hours_completed || 0}h</h3>
             <p className='text-gray-400 text-lg'>Total Service Hours</p>
           </div>
 
           <div className='bg-zinc-900 p-8 rounded-2xl text-center border border-zinc-700 hover:border-[#9B4DFF] transition-all group'>
             <FileText className='mx-auto h-16 w-16 text-blue-400 mb-4 group-hover:scale-110 transition-transform' />
-            <h3 className='text-2xl font-bold text-white mb-2'>{stats.certificates_issued || 0}</h3>
-            <p className='text-gray-400 text-lg'>Certificates Earned</p>
+            <h3 className='text-2xl font-bold text-white mb-2'>{stats.events_completed || 0}</h3>
+            <p className='text-gray-400 text-lg'>Events Completed</p>
           </div>
         </div>
 

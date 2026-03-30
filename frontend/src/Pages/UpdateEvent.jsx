@@ -13,6 +13,7 @@ const UpdateEvent = () => {
     name: '',
     description: '',
     date: '',
+    time: '',
     location: '',
     service_hours: '',
     max_participants: ''
@@ -21,17 +22,23 @@ const UpdateEvent = () => {
   useEffect(() => {
     const fetchEventData = async () => {
       try {
-        // Get event data - we'll need to add this endpoint to backend
-        const response = await api.get(`/events/${eventId}/`);
-        const event = response.data;
-        setFormData({
-          name: event.name || '',
-          description: event.description || '',
-          date: event.date || '',
-          location: event.location || '',
-          service_hours: event.service_hours || '',
-          max_participants: event.max_participants || ''
-        });
+        const response = await api.get(`/get-my-events-as-admin/`); // Get all events and find this one
+        const event = response.data.events.find(e => e.id === eventId);
+        
+        if (event) {
+          setFormData({
+            name: event.name || '',
+            description: event.description || '',
+            date: event.date || '',
+            time: event.time || '',
+            location: event.location || '',
+            service_hours: event.service_hours || '',
+            max_participants: event.max_participants || ''
+          });
+        } else {
+          alert("Event not found");
+          navigate('/admin');
+        }
       } catch (err) {
         console.error("Failed to fetch event data:", err);
         alert("Failed to load event data");
@@ -145,6 +152,17 @@ const UpdateEvent = () => {
                     onChange={handleInputChange}
                     className='w-full p-3 rounded border border-[#9B4DFF] bg-transparent text-white'
                     required
+                  />
+                </div>
+
+                <div>
+                  <label className='block text-white font-[montserrat] text-sm mb-2'>Time</label>
+                  <input
+                    type='time'
+                    name='time'
+                    value={formData.time}
+                    onChange={handleInputChange}
+                    className='w-full p-3 rounded border border-[#9B4DFF] bg-transparent text-white'
                   />
                 </div>
 

@@ -27,6 +27,8 @@ const Login = () => {
 
     if (response.data.success) {
       const userRole = response.data.user.role;
+      localStorage.setItem('userRole', userRole);
+      localStorage.setItem('isAuthenticated', 'true');
       
       // IMPORTANT: Wait for cookies to be set
       // Small delay to ensure cookies are stored
@@ -45,7 +47,13 @@ const Login = () => {
 
   } catch (err) {
     console.error("Login error:", err);
-    alert("Login failed. Check console.");
+    if (err.response?.data?.detail) {
+      alert(err.response.data.detail);
+    } else if (err.response?.data?.error) {
+      alert(err.response.data.error);
+    } else {
+      alert("Login failed. Check console.");
+    }
   } finally {
     setLoading(false);
   }

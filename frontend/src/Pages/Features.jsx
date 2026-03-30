@@ -16,7 +16,7 @@ const features = [
     id:"f2",
     icon:Calendar,
     title:"Event Management",
-    description:"Create, schedule, and track events with QR code-based attendance verification."
+    description:"Create, schedule, and track events with automated verified attendance."
   },
   {
     id:"f3",

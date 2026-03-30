@@ -98,72 +98,80 @@ const Analytics = () => {
                   <h3 className='font-[montserrat] text-white text-lg font-semibold'>Organization Overview</h3>
                 </div>
                 <div className='space-y-2'>
-                  <p className='text-gray-400'>Total Members: <span className='text-white font-semibold'>{analyticsData.organizationStats.total_members || 0}</span></p>
-                  <p className='text-gray-400'>Active Volunteers: <span className='text-white font-semibold'>{analyticsData.organizationStats.active_volunteers || 0}</span></p>
+                  <p className='text-gray-400'>Total Unique Volunteers: <span className='text-white font-semibold'>{analyticsData.organizationStats.unique_volunteers || 0}</span></p>
                   <p className='text-gray-400'>Total Events: <span className='text-white font-semibold'>{analyticsData.organizationStats.total_events || 0}</span></p>
-                  <p className='text-gray-400'>Completed Events: <span className='text-white font-semibold'>{analyticsData.organizationStats.completed_events || 0}</span></p>
+                  <p className='text-gray-400'>Total Participations: <span className='text-white font-semibold'>{analyticsData.organizationStats.total_participations || 0}</span></p>
+                  <p className='text-gray-400'>Total Service Hours: <span className='text-white font-semibold'>{analyticsData.organizationStats.total_hours || 0}h</span></p>
                 </div>
               </div>
 
               <div className='bg-zinc-900 p-6 rounded-lg'>
                 <div className='flex items-center gap-3 mb-4'>
                   <Calendar className='text-[#9B4DFF]' size={24} />
-                  <h3 className='font-[montserrat] text-white text-lg font-semibold'>Event Statistics</h3>
+                  <h3 className='font-[montserrat] text-white text-lg font-semibold'>System-wide Stats</h3>
                 </div>
                 <div className='space-y-2'>
-                  <p className='text-gray-400'>Upcoming Events: <span className='text-white font-semibold'>{analyticsData.eventParticipationStats.upcoming_events || 0}</span></p>
-                  <p className='text-gray-400'>Total Participations: <span className='text-white font-semibold'>{analyticsData.eventParticipationStats.total_participations || 0}</span></p>
-                  <p className='text-gray-400'>Avg Participants/Event: <span className='text-white font-semibold'>{analyticsData.eventParticipationStats.avg_participants_per_event || 0}</span></p>
-                  <p className='text-gray-400'>Completion Rate: <span className='text-white font-semibold'>{analyticsData.eventParticipationStats.completion_rate || 0}%</span></p>
+                  <p className='text-gray-400'>Total Registered Volunteers: <span className='text-white font-semibold'>{analyticsData.volunteerStats.total_volunteers || 0}</span></p>
+                  <p className='text-gray-400'>Total Platform Events: <span className='text-white font-semibold'>{analyticsData.volunteerStats.total_events || 0}</span></p>
+                  <p className='text-gray-400'>Total Participations: <span className='text-white font-semibold'>{analyticsData.volunteerStats.total_participations || 0}</span></p>
                 </div>
               </div>
 
               <div className='bg-zinc-900 p-6 rounded-lg'>
                 <div className='flex items-center gap-3 mb-4'>
                   <TrendingUp className='text-[#9B4DFF]' size={24} />
-                  <h3 className='font-[montserrat] text-white text-lg font-semibold'>Volunteer Impact</h3>
+                  <h3 className='font-[montserrat] text-white text-lg font-semibold'>Impact Ratios</h3>
                 </div>
                 <div className='space-y-2'>
-                  <p className='text-gray-400'>Total Service Hours: <span className='text-white font-semibold'>{analyticsData.volunteerStats.total_service_hours || 0}</span></p>
-                  <p className='text-gray-400'>Active Volunteers: <span className='text-white font-semibold'>{analyticsData.volunteerStats.active_volunteers || 0}</span></p>
-                  <p className='text-gray-400'>Avg Hours/Volunteer: <span className='text-white font-semibold'>{analyticsData.volunteerStats.avg_hours_per_volunteer || 0}</span></p>
-                  <p className='text-gray-400'>Certificates Issued: <span className='text-white font-semibold'>{analyticsData.volunteerStats.certificates_issued || 0}</span></p>
+                  <p className='text-gray-400'>Completion Rate: <span className='text-white font-semibold'>{analyticsData.organizationStats.total_participations ? Math.round((analyticsData.organizationStats.completed_participations / analyticsData.organizationStats.total_participations) * 100) : 0}%</span></p>
+                  <p className='text-gray-400'>Avg Hours per Participation: <span className='text-white font-semibold'>{analyticsData.organizationStats.total_participations ? (analyticsData.organizationStats.total_hours / analyticsData.organizationStats.total_participations).toFixed(1) : 0}h</span></p>
                 </div>
               </div>
             </div>
 
             {/* Detailed Stats */}
             <div className='grid grid-cols-1 lg:grid-cols-2 gap-6'>
-              {/* Event Participation Trends */}
+              {/* Event Participation Stats List */}
               <div className='bg-zinc-900 p-6 rounded-lg'>
-                <h3 className='font-[montserrat] text-white text-xl font-semibold mb-4'>Event Participation Trends</h3>
+                <h3 className='font-[montserrat] text-white text-xl font-semibold mb-4'>Event Performance</h3>
                 <div className='space-y-3'>
-                  {analyticsData.eventParticipationStats.participation_by_month ? (
-                    Object.entries(analyticsData.eventParticipationStats.participation_by_month).map(([month, count]) => (
-                      <div key={month} className='flex justify-between items-center'>
-                        <span className='text-gray-400'>{month}</span>
-                        <span className='text-white font-semibold'>{count} participations</span>
-                      </div>
-                    ))
-                  ) : (
-                    <p className='text-gray-400'>No participation data available</p>
-                  )}
-                </div>
-              </div>
-
-              {/* Top Performing Events */}
-              <div className='bg-zinc-900 p-6 rounded-lg'>
-                <h3 className='font-[montserrat] text-white text-xl font-semibold mb-4'>Top Performing Events</h3>
-                <div className='space-y-3'>
-                  {analyticsData.eventParticipationStats.top_events ? (
-                    analyticsData.eventParticipationStats.top_events.slice(0, 5).map((event, index) => (
-                      <div key={index} className='flex justify-between items-center'>
-                        <span className='text-gray-400 truncate'>{event.name}</span>
-                        <span className='text-white font-semibold'>{event.participants} participants</span>
+                  {analyticsData.eventParticipationStats.event_participation_stats ? (
+                    analyticsData.eventParticipationStats.event_participation_stats.map((event) => (
+                      <div key={event.event_id} className='flex justify-between items-center border-b border-zinc-800 pb-2'>
+                        <span className='text-gray-400 truncate max-w-[60%]'>{event.event_name}</span>
+                        <div className='flex gap-3 text-xs'>
+                          <span className='text-white'>{event.total_participants} Joined</span>
+                          <span className='text-green-400'>{event.completed} Done</span>
+                        </div>
                       </div>
                     ))
                   ) : (
                     <p className='text-gray-400'>No event data available</p>
+                  )}
+                </div>
+              </div>
+
+              {/* Volunteers per organization chart-like list */}
+              <div className='bg-zinc-900 p-6 rounded-lg'>
+                <h3 className='font-[montserrat] text-white text-xl font-semibold mb-4'>Global Distribution</h3>
+                <div className='space-y-3'>
+                  {analyticsData.volunteerStats.volunteers_per_organization ? (
+                    analyticsData.volunteerStats.volunteers_per_organization.slice(0, 8).map((item, index) => (
+                      <div key={index} className='space-y-1'>
+                        <div className='flex justify-between text-sm'>
+                          <span className='text-gray-400'>{item.organization}</span>
+                          <span className='text-white'>{item.volunteer_count}</span>
+                        </div>
+                        <div className='w-full bg-zinc-800 h-1 rounded-full overflow-hidden'>
+                          <div 
+                            className='bg-[#9B4DFF] h-full' 
+                            style={{ width: `${Math.min(100, (item.volunteer_count / analyticsData.volunteerStats.total_volunteers) * 100)}%` }}
+                          ></div>
+                        </div>
+                      </div>
+                    ))
+                  ) : (
+                    <p className='text-gray-400'>No distribution data available</p>
                   )}
                 </div>
               </div>

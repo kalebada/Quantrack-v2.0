@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { House, KeyRound, RefreshCcw } from "lucide-react";
-import api from "../api/axios";
+import axios from "axios";
 import logo from "../assets/logo.webp";
 
 const VerifyEmail = () => {
@@ -22,7 +22,12 @@ const VerifyEmail = () => {
     }
 
     try {
-      await api.post("/verify-email/", { code: trimmedCode });
+      const publicAxios = axios.create({
+        baseURL: import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:8000/api",
+        headers: { "Content-Type": "application/json" },
+        withCredentials: false,
+      });
+      await publicAxios.post("/verify-email/", { code: trimmedCode });
       alert("Email verified successfully. You can now log in.");
       navigate("/login");
     } catch (err) {
@@ -46,7 +51,12 @@ const VerifyEmail = () => {
         return;
       }
 
-      await api.post("/resend-verification-email/", { email: email });
+      const publicAxios = axios.create({
+        baseURL: import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:8000/api",
+        headers: { "Content-Type": "application/json" },
+        withCredentials: false,
+      });
+      await publicAxios.post("/resend-verification-code/", { email: email });
       alert("Verification code resent. Please check your email.");
     } catch (err) {
       alert(
