@@ -68,6 +68,9 @@ const SignUp = () => {
       });
 
       await registerAxios.post(endpoint, payload);
+      
+      // Store email for verification page
+      localStorage.setItem('user_email', data.email);
 
       alert("Account created! Please verify your email.");
       navigate("/verify-email");  

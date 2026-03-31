@@ -8,6 +8,9 @@ const SummaryCertificate = () => {
   const [stats, setStats] = useState({});
   const [loading, setLoading] = useState(true);
 
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
+
   useEffect(() => {
     const fetchStats = async () => {
       try {
@@ -23,19 +26,28 @@ const SummaryCertificate = () => {
   }, []);
 
   const generateSummary = async () => {
+    if (!startDate || !endDate) {
+      alert("Please select both start and end dates.");
+      return;
+    }
+    
     try {
-      const response = await api.post('/generate-summary-certificate/', {}, {
+      const response = await api.post('/summary-report/', {
+        start_date: startDate,
+        end_date: endDate
+      }, {
         responseType: 'blob'
       });
       const url = window.URL.createObjectURL(new Blob([response.data]));
       const link = document.createElement('a');
       link.href = url;
-      link.setAttribute('download', 'volunteer-summary-certificate.pdf');
+      link.setAttribute('download', `volunteer-summary-${startDate}-to-${endDate}.pdf`);
       document.body.appendChild(link);
       link.click();
       link.remove();
     } catch (err) {
       console.error('Failed to generate summary certificate', err);
+      alert(err.response?.data?.error || "Failed to generate summary certificate. Make sure you have completed participations in the selected range.");
     }
   };
 
@@ -88,12 +100,34 @@ const SummaryCertificate = () => {
 
         <div className='bg-gradient-to-r from-zinc-900 to-zinc-800 rounded-3xl p-10 text-center border border-[#9B4DFF]/30 shadow-2xl'>
           <h2 className='text-3xl font-bold text-white mb-6 font-[montserrat]'>Official Service Summary Certificate</h2>
+          
+          <div className='flex flex-col md:flex-row gap-4 justify-center items-center mb-8'>
+            <div className='flex flex-col items-start'>
+              <label className='text-gray-400 text-sm mb-1 ml-1'>Start Date</label>
+              <input 
+                type="date" 
+                value={startDate}
+                onChange={(e) => setStartDate(e.target.value)}
+                className='bg-zinc-800 text-white p-3 rounded-xl border border-zinc-700 focus:border-[#9B4DFF] outline-none transition-all'
+              />
+            </div>
+            <div className='flex flex-col items-start'>
+              <label className='text-gray-400 text-sm mb-1 ml-1'>End Date</label>
+              <input 
+                type="date" 
+                value={endDate}
+                onChange={(e) => setEndDate(e.target.value)}
+                className='bg-zinc-800 text-white p-3 rounded-xl border border-zinc-700 focus:border-[#9B4DFF] outline-none transition-all'
+              />
+            </div>
+          </div>
+
           <p className='text-xl text-gray-300 mb-8 max-w-2xl mx-auto leading-relaxed'>
             Verify your impact with our official summary certificate. Perfect for resumes, applications, and showcasing your community contributions.
           </p>
           <button
             onClick={generateSummary}
-            className='bg-gradient-to-r from-[#9B4DFF] to-[#8B3DFF] hover:from-[#8B3DFF] hover:to-[#7A2DDF] text-white px-12 py-6 rounded-2xl text-xl font-bold shadow-2xl hover:shadow-3xl transform hover:-translate-y-1 transition-all duration-300 font-[montserrat] tracking-wide'
+            className='bg-gradient-to-r from-[#9B4DFF] to-[#8B3DFF] hover:from-[#8B3DFF] hover:to-[#7A2DDF] text-white px-12 py-6 rounded-2xl text-xl font-bold shadow-2xl hover:shadow-3xl transform hover:-translate-y-1 transition-all duration-300 font-[montserrat] tracking-wide cursor-pointer'
           >
             <Download className='inline mr-2 h-6 w-6' />
             Download Summary Certificate

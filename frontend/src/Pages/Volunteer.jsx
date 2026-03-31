@@ -15,6 +15,7 @@ const Volunteer = () => {
   const [activeTab, setActiveTab] = useState('tasks');
 
   useEffect(() => {
+    console.log("Volunteer component loaded - Version 2.1 (Fixed Profile Link)");
     const fetchUserData = async () => {
       try {
         const [userRes, eventsRes, participationsRes, statsRes] = await Promise.all([
@@ -25,10 +26,15 @@ const Volunteer = () => {
         ]);
 
         setUserData(userRes.data);
-        const firstName = userRes.data.user?.first_name;
-        const lastName = userRes.data.user?.last_name;
-        const fullName = firstName && lastName ? `${firstName} ${lastName}` : null;
-        setUserName(fullName || userRes.data.user?.username || "Volunteer");
+        const user = userRes.data.user;
+        let displayName = "Volunteer";
+
+        if (user?.username) {
+          // If it's an email, take the part before @
+          displayName = user.username.includes('@') ? user.username.split('@')[0] : user.username;
+        }
+
+        setUserName(displayName);
         setEvents(eventsRes.data.events || []);
         setParticipations(participationsRes.data.participations || []);
         setStats(statsRes.data);
@@ -102,13 +108,14 @@ const Volunteer = () => {
       <div className='min-h-screen w-full bg-zinc-950 flex flex-col justify-start items-start gap-8 md:gap-16 lg:gap-12 px-4 py-4'>
         <div className='w-full flex flex-col lg:flex-row items-start justify-center lg:justify-between lg:items-center gap-4 md:gap-6 lg:gap-4'>
           <div className='w-full flex flex-col justify-center items-start gap-2 md:gap-4 lg:gap-2'>
-            <h1 className='font-[montserrat] text-white text-4xl md:text-5xl lg:text-5xl font-bold leading-14'><span className='text-2xl'>Welcome Back,</span><br />{userName}</h1>
+            <h1 className='font-[montserrat] text-white text-4xl md:text-5xl lg:text-5xl font-bold leading-14'><span className='text-2xl font-medium text-gray-400'>Welcome Back,</span><br /><span className="text-[#9B4DFF] capitalize">{userName}</span></h1>
             <h2 className='text-gray-400 font-[montserrat] w-[90%] md:text-xl lg:text-base'>Track your engagement and multiply your impact</h2>
           </div>
-          <div className='w-full flex justify-start lg:justify-end items-center gap-2 lg:gap-4 text-white md:text-xl lg:text-base'>
-            <button className='bg-zinc-800 hover:bg-zinc-700 px-4 py-2 rounded font-[montserrat] flex justify-center items-center gap-2 cursor-pointer transition-all' onClick={() => navigate('/qr-scanner')}><QrCode size={22} className="text-[#9B4DFF]" />QR Code</button>
-            <button className='bg-zinc-800 hover:bg-zinc-700 px-4 py-2 rounded font-[montserrat] flex justify-center items-center gap-2 cursor-pointer transition-all' onClick={() => navigate('/summary-certificate')}><Download size={22} className="text-green-400" />Certificates</button>
-            <button className=' bg-[#9B4DFF] px-4 py-2 rounded font-[montserrat] flex justify-center items-center gap-2 cursor-pointer transition-all' onClick={() => navigate('/join-organization')}><Plus size={22} />Join Organization</button>
+          <div className='w-full flex flex-wrap justify-start lg:justify-end items-center gap-3 lg:gap-4 text-white md:text-xl lg:text-base'>
+            <button className='bg-[#9B4DFF]/10 hover:bg-[#9B4DFF]/20 border border-[#9B4DFF]/50 px-4 py-3 rounded-xl font-[montserrat] flex justify-center items-center gap-2 cursor-pointer transition-all shadow-lg shadow-[#9B4DFF]/10' onClick={() => navigate('/qr-scanner')}><QrCode size={22} className="text-[#9B4DFF]" />QR Code</button>
+            <button className='bg-indigo-600/10 hover:bg-indigo-600/20 border border-indigo-600/50 px-4 py-3 rounded-xl font-[montserrat] flex justify-center items-center gap-2 cursor-pointer transition-all shadow-lg shadow-indigo-600/10' onClick={() => navigate('/update-volunteer-profile')}><Settings size={22} className="text-indigo-400" />Edit Profile</button>
+            <button className='bg-emerald-600/10 hover:bg-emerald-600/20 border border-emerald-600/50 px-4 py-3 rounded-xl font-[montserrat] flex justify-center items-center gap-2 cursor-pointer transition-all shadow-lg shadow-emerald-600/10' onClick={() => navigate('/summary-certificate')}><Download size={22} className="text-emerald-400" />Certificates</button>
+            <button className='bg-[#9B4DFF] hover:bg-[#8B3DFF] px-6 py-3 rounded-xl font-[montserrat] font-semibold flex justify-center items-center gap-2 cursor-pointer transition-all shadow-xl shadow-[#9B4DFF]/20' onClick={() => navigate('/join-organization')}><Plus size={22} />Join Organization</button>
           </div>
         </div>
         <div className='w-full flex flex-col justify-start items-start text-white gap-4'>
@@ -152,7 +159,7 @@ const Volunteer = () => {
                             </button>
                           )}
                           
-                          {(participation.status === 'pending' || participation.status === 'active') && (
+                          {(participation.status === 'pending' || participation.status === 'active' || participation.status === 'joined') && (
                             <button
                               onClick={() => handleCancelParticipation(participation.event)}
                               className='bg-zinc-700 hover:bg-red-600 text-white px-3 py-1 rounded text-xs transition-all flex items-center gap-1'
@@ -201,6 +208,46 @@ const Volunteer = () => {
                   </div>
                 )}
               </div>
+            </div>
+          </div>
+
+          <div className='w-full mt-8 flex flex-col justify-start items-start gap-4'>
+            <h1 className='font-[montserrat] text-lg md:text-xl lg:text-lg font-semibold'>Available Events (Discover & Join)</h1>
+            <div className='w-full bg-zinc-900 rounded-lg p-6'>
+              {events.length === 0 ? (
+                <div className='text-gray-500 py-8 text-center'>
+                  No upcoming events in your organization at the moment.
+                </div>
+              ) : (
+                <div className='grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6'>
+                  {events
+                    .filter(event => !participations.some(p => p.event === event.id))
+                    .map((event) => (
+                      <div key={event.id} className='bg-zinc-800 p-5 rounded-xl border border-zinc-700 hover:border-[#9B4DFF]/50 transition-all flex flex-col gap-3 shadow-md'>
+                        <div className='flex justify-between items-start'>
+                          <h3 className='font-bold text-white text-lg'>{event.title}</h3>
+                          <span className='bg-[#9B4DFF]/20 text-[#9B4DFF] px-2 py-1 rounded text-[10px] font-bold uppercase tracking-wider'>Upcoming</span>
+                        </div>
+                        <p className='text-gray-400 text-sm line-clamp-2'>{event.description}</p>
+                        <div className='flex flex-col gap-1 text-xs text-gray-500'>
+                          <div className='flex items-center gap-1'><Calendar size={14} /> {new Date(event.date).toLocaleDateString()}</div>
+                          <div className='flex items-center gap-1'><ClockAlert size={14} /> {event.duration_hours} Hours</div>
+                        </div>
+                        <button
+                          onClick={() => handleJoinEvent(event.id)}
+                          className='mt-2 bg-[#9B4DFF] hover:bg-[#8B3DFF] text-white px-4 py-2 rounded-lg font-semibold transition-all flex items-center justify-center gap-2'
+                        >
+                          <Plus size={18} /> Join Event
+                        </button>
+                      </div>
+                    ))}
+                  {events.filter(event => !participations.some(p => p.event === event.id)).length === 0 && (
+                    <div className='col-span-full text-gray-500 py-8 text-center'>
+                      Check back later for new opportunities! You're already part of everything upcoming.
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           </div>
 
