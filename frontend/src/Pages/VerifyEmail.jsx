@@ -21,13 +21,24 @@ const VerifyEmail = () => {
       return;
     }
 
+    const email = localStorage.getItem('user_email');
+    
+    if (!email) {
+      alert("Registration email not found. Please try signing up again or resending the code.");
+      setLoading(false);
+      return;
+    }
+
     try {
       const publicAxios = axios.create({
         baseURL: import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:8000/api",
         headers: { "Content-Type": "application/json" },
         withCredentials: false,
       });
-      await publicAxios.post("/verify-email/", { code: trimmedCode });
+      await publicAxios.post("/verify-email/", { 
+        email: email,
+        code: trimmedCode 
+      });
       alert("Email verified successfully. You can now log in.");
       navigate("/login");
     } catch (err) {
